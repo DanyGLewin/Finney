@@ -28,10 +28,6 @@ ignored_suffixes = [".pyc", ".pack", ".pkl"]
 ignored_dirs = [".git", ".idea", ".venv"]
 
 
-def get_files(root):
-    return [p for p in Path(root).rglob('*') if p.is_file()]
-
-
 def should_scan(file):
     if file.suffix in ignored_suffixes:
         return False
@@ -43,21 +39,8 @@ def should_scan(file):
     return True
 
 
-def scan(filename):
-    lines = open(filename, "r").readlines()
-    match = False
-    for i, line in enumerate(lines, start=1):
-        for regex in regexes:
-            if re.search(regex, line):
-                print(f"{filename}:{i}: {line}")
-                match = True
-    return match
-
-
-def scan_mmap(file_path):
+def scan(file_path):
     file_name = Path(file_path).name
-    start = time.time()
-    match = False
     matches = []
     with open(file_path, "r+") as f:
         try:
@@ -68,41 +51,31 @@ def scan_mmap(file_path):
         for regex in regexes:
             if mo := re.search(regex, data):
                 matches.append(mo.group().decode("utf-8"))
-                match = True
     if matches:
         print(f"{file_name}: {len(matches)} {'matches' if len(matches) > 1 else 'match'}")
         for match in matches:
             print(f"  - {match}")
 
-    if time.time() - start > 1:
-        print(f"file {file_name} took {round(time.time() - start, 4)} seconds")
-    return match
+    return bool(matches)
 
 
 def main():
     start = time.time()
-    # root = sys.argv[1]
-    root = "/Users/danylewin/thingies/university/CS Workshop/SecretSearcher"
-    files = get_files(root)
+    files = [Path(f) for f in sys.argv[1:]]
     match = False
     for file in files:
         if not should_scan(file):
             continue
-        # print(file)
         try:
-            if scan_mmap(file):
+            if scan(file):
                 match = True
         except Exception as e:
             print(f"Failed to scan {file}")
-            print(e)
+            raise
     print(f"ran for {time.time() - start} seconds")
     if match:
         print("Found at least one suspected secret!")
         exit(1)
-    else:
-        print("Everything looks good!")
-        exit(0)
-    # return files
 
 
 if __name__ == '__main__':
