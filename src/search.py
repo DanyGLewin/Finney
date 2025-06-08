@@ -23,7 +23,7 @@ regexes = [
     # rb"[\w\-\.]+@([\w-]+\.)+[\w-]{2,}"
 ]
 
-ignored_names = [".DS_Store", "noise.txt"]
+ignored_names = [".DS_Store", "noise.txt", "noise_generator.py"]
 ignored_suffixes = [".pyc", ".pack", ".pkl"]
 ignored_dirs = [".git", ".idea", ".venv"]
 
@@ -52,15 +52,13 @@ def scan(file_path):
             if mo := re.search(regex, data):
                 matches.append(mo.group().decode("utf-8"))
     if matches:
-        print(f"{file_name}: {len(matches)} {'matches' if len(matches) > 1 else 'match'}")
         for match in matches:
-            print(f"  - {match}")
+            print(f"{file_name} - {match}")
 
     return bool(matches)
 
 
 def main():
-    start = time.time()
     files = [Path(f) for f in sys.argv[1:]]
     match = False
     for file in files:
@@ -72,9 +70,7 @@ def main():
         except Exception as e:
             print(f"Failed to scan {file}")
             raise
-    print(f"ran for {time.time() - start} seconds")
     if match:
-        print("Found at least one suspected secret!")
         exit(1)
 
 

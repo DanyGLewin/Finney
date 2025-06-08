@@ -39,7 +39,7 @@ def single_big_file():
 
 
 def many_small_files():
-    output_dir = "dump"
+    output_dir = "tests/dump"
     os.makedirs(output_dir, exist_ok=True)
 
     file_count = 10000  # 10,000 files
