@@ -1,5 +1,6 @@
 click
-pre-commit
+PyYAML
 pandas
 tensorflow
 scikit-learn
+pre-commit
