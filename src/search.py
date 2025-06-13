@@ -1,8 +1,12 @@
 import mmap
 import re
-import sys
-import time
+from hashlib import sha256
 from pathlib import Path
+from typing import Sequence
+
+import click
+
+from domain_objects import Match, IgnoreConfig
 
 regexes = [
     rb"[1-9][0-9]+-[0-9a-zA-Z]{40}",
@@ -23,56 +27,47 @@ regexes = [
     # rb"[\w\-\.]+@([\w-]+\.)+[\w-]{2,}"
 ]
 
-ignored_names = [".DS_Store", "noise.txt", "noise_generator.py"]
-ignored_suffixes = [".pyc", ".pack", ".pkl"]
-ignored_dirs = [".git", ".idea", ".venv"]
 
-
-def should_scan(file):
-    if file.suffix in ignored_suffixes:
+def should_scan(file: Path, ignored: IgnoreConfig) -> bool:
+    if file.suffix in ignored.suffixes:
         return False
-    if file.name in ignored_names:
+    if file.name in ignored.files:
         return False
-    for dir in ignored_dirs:
+    for dir in ignored.dirs:
         if dir in file.parts:
             return False
     return True
 
 
-def scan(file_path):
-    file_name = Path(file_path).name
+def scan(file_path: Path, ignored: IgnoreConfig) -> list[Match]:
     matches = []
     with open(file_path, "r+") as f:
         try:
             data = mmap.mmap(f.fileno(), 0)
         except ValueError as e:
             if e.args[0] == 'cannot mmap an empty file':
-                return False
+                return []
         for regex in regexes:
             if mo := re.search(regex, data):
-                matches.append(mo.group().decode("utf-8"))
-    if matches:
-        for match in matches:
-            print(f"{file_name} - {match}")
-
-    return bool(matches)
-
-
-def main():
-    files = [Path(f) for f in sys.argv[1:]]
-    match = False
-    for file in files:
-        if not should_scan(file):
-            continue
-        try:
-            if scan(file):
-                match = True
-        except Exception as e:
-            print(f"Failed to scan {file}")
-            raise
-    if match:
-        exit(1)
+                match_bytes = mo.group()
+                match_hash = sha256(match_bytes).hexdigest()
+                if match_hash in ignored.hashes:
+                    continue
+                matches.append(Match(file_path, match_bytes))
+    return matches
 
 
-if __name__ == '__main__':
-    x = main()
+def scan_files(paths: Sequence[str], ignored: IgnoreConfig) -> list[Match]:
+    files = [Path(f) for f in paths]
+    matches = []
+    hide_bar = len(paths) <= 1
+    with click.progressbar(files, label="Scanning files", hidden=hide_bar) as bar:
+        for file in bar:
+            if not should_scan(file, ignored):
+                continue
+            try:
+                matches.extend(scan(file, ignored))
+            except Exception as e:
+                print(f"Failed to scan {file}")
+                raise
+    return matches
