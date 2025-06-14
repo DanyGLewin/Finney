@@ -1,0 +1,31 @@
+[project]
+name = "SecretSearcher"
+version = "0.0.1"
+description = "Pre-commit hook to make sure you don't accidentally push secrets"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "click",
+    "PyYAML",
+    "pandas",
+    "tensorflow",
+    "scikit-learn",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+]
+
+[project.scripts]
+# Installs a `mycli` console command that invokes the top-level module `cli:main`
+secrets = "cli:cli"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# Use src/ layout with a single module cli.py
+package-dir = { "" = "src" }
+py-modules = ["cli"]

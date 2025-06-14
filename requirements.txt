@@ -1,6 +1,0 @@
-click
-PyYAML
-pandas
-tensorflow
-scikit-learn
-pre-commit
