@@ -10,7 +10,7 @@ class Match:
     match: bytes
 
     def __str__(self):
-        return f"{self.file}: {self.match} | {self.sha}"
+        return f"{self.path}: '{self.match.decode("utf-8")}'"
 
     @property
     def sha(self):

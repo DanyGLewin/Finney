@@ -77,9 +77,8 @@ def run(paths):
     ignored = _load_ignore_config()
     matches: Sequence[Match] = search.scan_files(paths, ignored)
     if matches:
-        print("Hellow world")
-        for match in matches:
-            print(match)
+        for i, match in enumerate(matches, start=1):
+            print(f"{i:>2} | {match}")
         _save_last_matches(matches)
         exit(1)
 
