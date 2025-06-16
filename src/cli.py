@@ -14,14 +14,14 @@ config_path = ".secrets/config"
 last_matches_path = ".secrets/log"
 
 
-class IGNORE_TYPES(Enum):
+class ENTRY_TYPE(Enum):
     HASHES = "HASHES"
     FILES = "FILES"
     DIRS = "DIRS"
     SUFFIXES = "SUFFIXES"
 
 
-class EDIT_MODE(Enum):
+class MODE(Enum):
     ADD = "ADD"
     SUBTRACT = "SUBTRACT"
 
@@ -42,15 +42,20 @@ def _load_ignore_config() -> IgnoreConfig:
     )
 
 
-def _add_ignore_entries(mode: IGNORE_TYPES, values: Sequence[str]) -> None:
+def _edit_ignore_entries(entry_type: ENTRY_TYPE, mode: MODE, values: Sequence[str]) -> None:
     prev_config = _load_ignore_config()
+
+    if entry_type == ENTRY_TYPE.HASHES:
+        byte_values = [val.encode("utf-8") for val in values]
+        values = [sha256(val).hexdigest() for val in byte_values]
+
     added_config = IgnoreConfig(
-        dirs=values if mode == IGNORE_TYPES.DIRS else [],
-        files=values if mode == IGNORE_TYPES.FILES else [],
-        suffixes=values if mode == IGNORE_TYPES.SUFFIXES else [],
-        hashes=values if mode == IGNORE_TYPES.HASHES else [],
+        dirs=values if entry_type == ENTRY_TYPE.DIRS else [],
+        files=values if entry_type == ENTRY_TYPE.FILES else [],
+        suffixes=values if entry_type == ENTRY_TYPE.SUFFIXES else [],
+        hashes=values if entry_type == ENTRY_TYPE.HASHES else [],
     )
-    combined = prev_config + added_config
+    combined = prev_config + added_config if mode == MODE.ADD else prev_config - added_config
     with open(config_path, "w+") as f:
         yaml.safe_dump(
             {"ignore": combined.to_dict()},
@@ -59,6 +64,23 @@ def _add_ignore_entries(mode: IGNORE_TYPES, values: Sequence[str]) -> None:
             default_flow_style=False,
             sort_keys=False,
         )
+
+
+def _select_entry_type(files: bool, dirs: bool, suffixes: bool, string_hashes: bool) -> ENTRY_TYPE:
+    if sum([files, dirs, suffixes, string_hashes]) > 1:
+        raise click.UsageError("Options -f, -d, -s, and -h are mutually exclusive")
+
+    elif suffixes:
+        return ENTRY_TYPE.SUFFIXES
+
+    elif string_hashes:
+        return ENTRY_TYPE.HASHES
+
+    elif dirs:
+        return ENTRY_TYPE.DIRS
+
+    else:
+        return ENTRY_TYPE.FILES
 
 
 def _save_last_matches(matches: Sequence[Match]) -> None:
@@ -91,29 +113,10 @@ def run(paths):
 @click.option('-i', 'interactive', is_flag=True, help='Interactive mode')
 @click.argument('values', nargs=-1)
 def ignore(files, dirs, suffixes, string_hashes, interactive, values):
-    if sum([files, dirs, suffixes, string_hashes, interactive]) > 1:
-        raise click.UsageError("Options -f, -d, -s, -h and -i are mutually exclusive")
-
     if interactive:
-        if values:
-            raise click.UsageError("You cannot pass values when using -i")
         raise NotImplementedError
-
-    elif suffixes:
-        mode = IGNORE_TYPES.SUFFIXES
-
-    elif string_hashes:
-        mode = IGNORE_TYPES.HASHES
-        byte_values = [val.encode("utf-8") for val in values]
-        values = [sha256(val).hexdigest() for val in byte_values]
-
-    elif dirs:
-        mode = IGNORE_TYPES.DIRS
-
-    else:
-        mode = IGNORE_TYPES.FILES
-
-    _add_ignore_entries(mode, list(values))
+    entry_type = _select_entry_type(files, dirs, suffixes, string_hashes)
+    _edit_ignore_entries(entry_type, mode=MODE.ADD, values=list(values))
 
 
 @cli.command("reset")
@@ -124,7 +127,10 @@ def ignore(files, dirs, suffixes, string_hashes, interactive, values):
 @click.option('-i', 'interactive', is_flag=True, help='Interactive mode')
 @click.argument('values', nargs=-1)
 def reset(files, dirs, suffixes, string_hashes, interactive, values):
-    raise NotImplementedError
+    if interactive:
+        raise NotImplementedError
+    entry_type = _select_entry_type(files, dirs, suffixes, string_hashes)
+    _edit_ignore_entries(entry_type, mode=MODE.SUBTRACT, values=list(values))
 
 
 if __name__ == '__main__':
