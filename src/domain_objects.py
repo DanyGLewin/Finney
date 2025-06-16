@@ -27,3 +27,16 @@ class IgnoreConfig:
     files: List[Path]
     suffixes: List[str]
     hashes: List[bytes]
+
+    def __add__(self, other):
+        if not isinstance(other, IgnoreConfig):
+            raise TypeError
+        return IgnoreConfig(
+            self.dirs + other.dirs,
+            self.files + other.files,
+            self.suffixes + other.suffixes,
+            self.hashes + other.hashes
+        )
+
+    def to_dict(self):
+        return self.__dict__

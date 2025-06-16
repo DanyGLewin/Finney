@@ -518,4 +518,4 @@ pyrightconfig.json
 
 .idea/*
 tests/dump/*
-.secretslog
+.secrets/log
