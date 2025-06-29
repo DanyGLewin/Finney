@@ -15,7 +15,7 @@ last_matches_path = ".secrets/log"
 
 
 class ENTRY_TYPE(Enum):
-    STRINGS = "HASHES"
+    STRINGS = "STRINGS"
     FILES = "FILES"
     DIRS = "DIRS"
     TYPES = "SUFFIXES"
@@ -92,6 +92,10 @@ def _save_last_matches(matches: Sequence[Match]) -> None:
 def cli():
     pass
 
+def _pretty_print(matches: Sequence[Match]) -> None:
+    print(f"Found {len(matches)} {'secrets' if len(matches) > 1 else 'secret'}:")
+    for i, match in enumerate(matches, start=1):
+        print(f"  {i:>2} | {match}")
 
 @cli.command()
 @click.argument('paths', nargs=-1)
@@ -99,8 +103,7 @@ def run(paths):
     ignored = _load_ignore_config()
     matches: Sequence[Match] = search.scan_files(paths, ignored)
     if matches:
-        for i, match in enumerate(matches, start=1):
-            print(f"{i:>2} | {match}")
+        _pretty_print(matches)
         _save_last_matches(matches)
         exit(1)
 

@@ -50,8 +50,9 @@ def scan(file_path: Path, ignored: IgnoreConfig) -> list[Match]:
         for regex in regexes:
             if mo := re.search(regex, data):
                 match_bytes = mo.group()
+                match_str = match_bytes.decode("utf-8")
                 match_hash = sha256(match_bytes).hexdigest()
-                if match_hash in ignored.strings:
+                if match_str in ignored.strings or match_hash in ignored.strings:
                     continue
                 matches.append(Match(file_path, match_bytes))
     return matches
@@ -60,9 +61,9 @@ def scan(file_path: Path, ignored: IgnoreConfig) -> list[Match]:
 def scan_files(paths: Sequence[str], ignored: IgnoreConfig) -> list[Match]:
     files = [Path(f) for f in paths]
     matches = []
-    hide_bar = len(paths) <= 1
+    hide_bar = len(paths) < 10
     with click.progressbar(files, label="Scanning files", hidden=hide_bar) as bar:
-        for file in bar:
+        for file in files:
             if not should_scan(file, ignored):
                 continue
             try:
