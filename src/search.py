@@ -29,7 +29,7 @@ regexes = [
 
 
 def should_scan(file: Path, ignored: IgnoreConfig) -> bool:
-    if file.suffix in ignored.suffixes:
+    if file.suffix in ignored.types:
         return False
     if file.name in ignored.files:
         return False
@@ -51,7 +51,7 @@ def scan(file_path: Path, ignored: IgnoreConfig) -> list[Match]:
             if mo := re.search(regex, data):
                 match_bytes = mo.group()
                 match_hash = sha256(match_bytes).hexdigest()
-                if match_hash in ignored.hashes:
+                if match_hash in ignored.strings:
                     continue
                 matches.append(Match(file_path, match_bytes))
     return matches

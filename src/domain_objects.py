@@ -29,8 +29,8 @@ class Match:
 class IgnoreConfig:
     dirs: List[Path]
     files: List[Path]
-    suffixes: List[str]
-    hashes: List[bytes]
+    types: List[str]
+    strings: List[bytes]
 
     def __add__(self, other):
         if not isinstance(other, IgnoreConfig):
@@ -38,8 +38,8 @@ class IgnoreConfig:
         return IgnoreConfig(
             self.dirs + other.dirs,
             self.files + other.files,
-            self.suffixes + other.suffixes,
-            self.hashes + other.hashes
+            self.types + other.types,
+            self.strings + other.strings
         )
 
     def __sub__(self, other):
@@ -48,8 +48,8 @@ class IgnoreConfig:
         return IgnoreConfig(
             _sub(self.dirs, other.dirs),
             _sub(self.files, other.files),
-            _sub(self.suffixes, other.suffixes),
-            _sub(self.hashes, other.hashes),
+            _sub(self.types, other.types),
+            _sub(self.strings, other.strings),
         )
 
     def to_dict(self):

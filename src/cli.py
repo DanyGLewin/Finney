@@ -15,10 +15,10 @@ last_matches_path = ".secrets/log"
 
 
 class ENTRY_TYPE(Enum):
-    HASHES = "HASHES"
+    STRINGS = "HASHES"
     FILES = "FILES"
     DIRS = "DIRS"
-    SUFFIXES = "SUFFIXES"
+    TYPES = "SUFFIXES"
 
 
 class MODE(Enum):
@@ -28,7 +28,7 @@ class MODE(Enum):
 
 def _load_ignore_config() -> IgnoreConfig:
     if not os.path.exists(config_path):
-        return IgnoreConfig(dirs=[], files=[], suffixes=[], hashes=[])
+        return IgnoreConfig(dirs=[], files=[], types=[], strings=[])
 
     with open(config_path, "r") as f:
         config = yaml.safe_load(f) or {}
@@ -37,23 +37,23 @@ def _load_ignore_config() -> IgnoreConfig:
     return IgnoreConfig(
         dirs=config.get("dirs") or [],
         files=config.get("files") or [],
-        suffixes=config.get("suffixes") or [],
-        hashes=config.get("hashes") or [],
+        types=config.get("types") or [],
+        strings=config.get("strings") or [],
     )
 
 
 def _edit_ignore_entries(entry_type: ENTRY_TYPE, mode: MODE, values: Sequence[str]) -> None:
     prev_config = _load_ignore_config()
 
-    if entry_type == ENTRY_TYPE.HASHES:
+    if entry_type == ENTRY_TYPE.STRINGS:
         byte_values = [val.encode("utf-8") for val in values]
         values = [sha256(val).hexdigest() for val in byte_values]
 
     added_config = IgnoreConfig(
         dirs=values if entry_type == ENTRY_TYPE.DIRS else [],
         files=values if entry_type == ENTRY_TYPE.FILES else [],
-        suffixes=values if entry_type == ENTRY_TYPE.SUFFIXES else [],
-        hashes=values if entry_type == ENTRY_TYPE.HASHES else [],
+        types=values if entry_type == ENTRY_TYPE.TYPES else [],
+        strings=values if entry_type == ENTRY_TYPE.STRINGS else [],
     )
     combined = prev_config + added_config if mode == MODE.ADD else prev_config - added_config
     with open(config_path, "w+") as f:
@@ -66,15 +66,15 @@ def _edit_ignore_entries(entry_type: ENTRY_TYPE, mode: MODE, values: Sequence[st
         )
 
 
-def _select_entry_type(files: bool, dirs: bool, suffixes: bool, string_hashes: bool) -> ENTRY_TYPE:
-    if sum([files, dirs, suffixes, string_hashes]) > 1:
-        raise click.UsageError("Options -f, -d, -s, and -h are mutually exclusive")
+def _select_entry_type(files: bool, dirs: bool, types: bool, strings: bool) -> ENTRY_TYPE:
+    if sum([files, dirs, types, strings]) > 1:
+        raise click.UsageError("Options -f, -d, -t, and -s are mutually exclusive")
 
-    elif suffixes:
-        return ENTRY_TYPE.SUFFIXES
+    elif types:
+        return ENTRY_TYPE.TYPES
 
-    elif string_hashes:
-        return ENTRY_TYPE.HASHES
+    elif strings:
+        return ENTRY_TYPE.STRINGS
 
     elif dirs:
         return ENTRY_TYPE.DIRS
@@ -108,28 +108,28 @@ def run(paths):
 @cli.command("ignore")
 @click.option('-f', 'files', is_flag=True, help='Add files to ignore list (default)')
 @click.option('-d', 'dirs', is_flag=True, help='Add directories to ignore list')
-@click.option('-s', 'suffixes', is_flag=True, help='Add file suffixes to ignore list')
-@click.option('-h', 'string_hashes', is_flag=True, help='Add specific string hashes to ignore list')
+@click.option('-t', 'types', is_flag=True, help='Add file types to ignore list')
+@click.option('-s', 'strings', is_flag=True, help='Add specific strings to ignore list')
 @click.option('-i', 'interactive', is_flag=True, help='Interactive mode')
 @click.argument('values', nargs=-1)
-def ignore(files, dirs, suffixes, string_hashes, interactive, values):
+def ignore(files, dirs, types, strings, interactive, values):
     if interactive:
         raise NotImplementedError
-    entry_type = _select_entry_type(files, dirs, suffixes, string_hashes)
+    entry_type = _select_entry_type(files, dirs, types, strings)
     _edit_ignore_entries(entry_type, mode=MODE.ADD, values=list(values))
 
 
-@cli.command("reset")
+@cli.command("unignore")
 @click.option('-f', 'files', is_flag=True, help='Add files to ignore list (default)')
 @click.option('-d', 'dirs', is_flag=True, help='Add directories to ignore list')
-@click.option('-s', 'suffixes', is_flag=True, help='Add file suffixes to ignore list')
-@click.option('-h', 'string_hashes', is_flag=True, help='Add specific string hashes to ignore list')
+@click.option('-t', 'types', is_flag=True, help='Add file types to ignore list')
+@click.option('-s', 'strings', is_flag=True, help='Add specific strings to ignore list')
 @click.option('-i', 'interactive', is_flag=True, help='Interactive mode')
 @click.argument('values', nargs=-1)
-def reset(files, dirs, suffixes, string_hashes, interactive, values):
+def unignore(files, dirs, types, strings, interactive, values):
     if interactive:
         raise NotImplementedError
-    entry_type = _select_entry_type(files, dirs, suffixes, string_hashes)
+    entry_type = _select_entry_type(files, dirs, types, strings)
     _edit_ignore_entries(entry_type, mode=MODE.SUBTRACT, values=list(values))
 
 
