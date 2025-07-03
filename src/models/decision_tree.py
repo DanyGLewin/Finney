@@ -4,6 +4,7 @@ import re
 import string
 import time
 from datetime import datetime
+from itertools import combinations_with_replacement
 
 import pandas as pd
 from dateutil import parser
@@ -116,6 +117,9 @@ sonority = {
     "y": 10,
     "z": 6,
 }
+
+alphabet = list("abcdefghijklmnopqrstuvwxyz")
+short_words = alphabet + ["".join(x) for x in combinations_with_replacement(alphabet, 2)]
 
 
 def get_vowel_indices(word: str) -> list[int]:
@@ -313,7 +317,7 @@ def get_features(s: str) -> tuple[float | bool, ...]:
 
     # contains a real word
     real_words_contained = 0
-    with open("src/models/words.txt", "r") as f:
+    with open("data/words.txt", "r") as f:
         for line in f.readlines():
             if line.strip().casefold() in s.casefold():
                 real_words_contained += 1
@@ -337,9 +341,9 @@ def make_tree():
         header=None,
         names=["text", "label"],
     ).sample(100000)
-    texts = df["text"].astype(str).tolist()
-    labels = df["label"].astype(int).tolist()
-    labels = [y > 0 for y in labels]
+    texts = df["text"].astype(str).tolist() + short_words
+    labels = df["label"].astype(int).tolist() + [0 for _ in short_words]
+    # labels = [y > 0 for y in labels]
 
     start = datetime.now()
     print(
