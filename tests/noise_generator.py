@@ -33,7 +33,9 @@ def single_big_file():
             if not i % 50:
                 print(i)
             if i == secret_chunk:
-                print(f"got to chunk {i}, placing secret {example_secret} (encoded as {example_secret.encode()})")
+                print(
+                    f"got to chunk {i}, placing secret {example_secret} (encoded as {example_secret.encode()})"
+                )
             f.write(example_secret.encode())
             f.write(os.urandom(chunk_size))
 
@@ -55,7 +57,10 @@ def many_small_files():
                 f.write(os.urandom(file_size))
                 continue
             secret_index = files_with_secrets.index(i)
-            secret, secret_position = secrets[secret_index], secret_positions[secret_index]
+            secret, secret_position = (
+                secrets[secret_index],
+                secret_positions[secret_index],
+            )
             f.write(os.urandom(secret_position))
             f.write(bytes(secret, "utf-8"))
             f.write(os.urandom(file_size - secret_position - len(secret)))

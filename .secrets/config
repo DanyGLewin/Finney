@@ -7,6 +7,7 @@ ignore:
     - .DS_Store
     - noise.txt
     - noise_generator.py
+    - words.txt
     types:
     - .pyc
     - .pack

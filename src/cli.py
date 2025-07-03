@@ -42,7 +42,9 @@ def _load_ignore_config() -> IgnoreConfig:
     )
 
 
-def _edit_ignore_entries(entry_type: ENTRY_TYPE, mode: MODE, values: Sequence[str]) -> None:
+def _edit_ignore_entries(
+    entry_type: ENTRY_TYPE, mode: MODE, values: Sequence[str]
+) -> None:
     prev_config = _load_ignore_config()
 
     if entry_type == ENTRY_TYPE.STRINGS:
@@ -55,7 +57,9 @@ def _edit_ignore_entries(entry_type: ENTRY_TYPE, mode: MODE, values: Sequence[st
         types=values if entry_type == ENTRY_TYPE.TYPES else [],
         strings=values if entry_type == ENTRY_TYPE.STRINGS else [],
     )
-    combined = prev_config + added_config if mode == MODE.ADD else prev_config - added_config
+    combined = (
+        prev_config + added_config if mode == MODE.ADD else prev_config - added_config
+    )
     with open(config_path, "w+") as f:
         yaml.safe_dump(
             {"ignore": combined.to_dict()},
@@ -66,7 +70,9 @@ def _edit_ignore_entries(entry_type: ENTRY_TYPE, mode: MODE, values: Sequence[st
         )
 
 
-def _select_entry_type(files: bool, dirs: bool, types: bool, strings: bool) -> ENTRY_TYPE:
+def _select_entry_type(
+    files: bool, dirs: bool, types: bool, strings: bool
+) -> ENTRY_TYPE:
     if sum([files, dirs, types, strings]) > 1:
         raise click.UsageError("Options -f, -d, -t, and -s are mutually exclusive")
 
@@ -92,13 +98,17 @@ def _save_last_matches(matches: Sequence[Match]) -> None:
 def cli():
     pass
 
+
 def _pretty_print(matches: Sequence[Match]) -> None:
-    print(f"Found {len(matches)} {'secrets' if len(matches) > 1 else 'secret'}:")
+    click.secho(
+        f"Found {len(matches)} {'secrets' if len(matches) > 1 else 'secret'}:", fg="red"
+    )
     for i, match in enumerate(matches, start=1):
-        print(f"  {i:>2} | {match}")
+        click.secho(f"  {i:>2} | {match}", fg="red")
+
 
 @cli.command()
-@click.argument('paths', nargs=-1)
+@click.argument("paths", nargs=-1)
 def run(paths):
     ignored = _load_ignore_config()
     matches: Sequence[Match] = search.scan_files(paths, ignored)
@@ -109,12 +119,12 @@ def run(paths):
 
 
 @cli.command("ignore")
-@click.option('-f', 'files', is_flag=True, help='Add files to ignore list (default)')
-@click.option('-d', 'dirs', is_flag=True, help='Add directories to ignore list')
-@click.option('-t', 'types', is_flag=True, help='Add file types to ignore list')
-@click.option('-s', 'strings', is_flag=True, help='Add specific strings to ignore list')
-@click.option('-i', 'interactive', is_flag=True, help='Interactive mode')
-@click.argument('values', nargs=-1)
+@click.option("-f", "files", is_flag=True, help="Add files to ignore list (default)")
+@click.option("-d", "dirs", is_flag=True, help="Add directories to ignore list")
+@click.option("-t", "types", is_flag=True, help="Add file types to ignore list")
+@click.option("-s", "strings", is_flag=True, help="Add specific strings to ignore list")
+@click.option("-i", "interactive", is_flag=True, help="Interactive mode")
+@click.argument("values", nargs=-1)
 def ignore(files, dirs, types, strings, interactive, values):
     if interactive:
         raise NotImplementedError
@@ -123,12 +133,12 @@ def ignore(files, dirs, types, strings, interactive, values):
 
 
 @cli.command("unignore")
-@click.option('-f', 'files', is_flag=True, help='Add files to ignore list (default)')
-@click.option('-d', 'dirs', is_flag=True, help='Add directories to ignore list')
-@click.option('-t', 'types', is_flag=True, help='Add file types to ignore list')
-@click.option('-s', 'strings', is_flag=True, help='Add specific strings to ignore list')
-@click.option('-i', 'interactive', is_flag=True, help='Interactive mode')
-@click.argument('values', nargs=-1)
+@click.option("-f", "files", is_flag=True, help="Add files to ignore list (default)")
+@click.option("-d", "dirs", is_flag=True, help="Add directories to ignore list")
+@click.option("-t", "types", is_flag=True, help="Add file types to ignore list")
+@click.option("-s", "strings", is_flag=True, help="Add specific strings to ignore list")
+@click.option("-i", "interactive", is_flag=True, help="Interactive mode")
+@click.argument("values", nargs=-1)
 def unignore(files, dirs, types, strings, interactive, values):
     if interactive:
         raise NotImplementedError
@@ -136,5 +146,5 @@ def unignore(files, dirs, types, strings, interactive, values):
     _edit_ignore_entries(entry_type, mode=MODE.SUBTRACT, values=list(values))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

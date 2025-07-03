@@ -11,14 +11,14 @@ def _sub(l1, l2):
 @dataclass
 class Match:
     path: Path
-    match: bytes
+    match: str
 
     def __str__(self):
-        return f"{self.path}: '{self.match.decode("utf-8")}'"
+        return f"{self.path}: '{self.match}'"
 
     @property
     def sha(self):
-        return sha256(self.match).hexdigest()
+        return sha256(self.match.encode("utf-8")).hexdigest()
 
     @property
     def file(self):
@@ -39,7 +39,7 @@ class IgnoreConfig:
             self.dirs + other.dirs,
             self.files + other.files,
             self.types + other.types,
-            self.strings + other.strings
+            self.strings + other.strings,
         )
 
     def __sub__(self, other):

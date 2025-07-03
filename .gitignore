@@ -519,3 +519,4 @@ pyrightconfig.json
 .idea/*
 tests/dump/*
 .secrets/log
+*.pkl
