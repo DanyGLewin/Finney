@@ -71,22 +71,22 @@ def _edit_ignore_entries(
 
 
 def _select_entry_type(
-    files: bool, dirs: bool, types: bool, strings: bool
+    strings: bool, files: bool, dirs: bool, types: bool
 ) -> ENTRY_TYPE:
-    if sum([files, dirs, types, strings]) > 1:
-        raise click.UsageError("Options -f, -d, -t, and -s are mutually exclusive")
+    if sum([strings, files, dirs, types]) > 1:
+        raise click.UsageError("Options -s, -f, -d, and -t are mutually exclusive")
 
     elif types:
         return ENTRY_TYPE.TYPES
 
-    elif strings:
-        return ENTRY_TYPE.STRINGS
+    elif files:
+        return ENTRY_TYPE.FILES
 
     elif dirs:
         return ENTRY_TYPE.DIRS
 
     else:
-        return ENTRY_TYPE.FILES
+        return ENTRY_TYPE.STRINGS
 
 
 def _save_last_matches(matches: Sequence[Match]) -> None:
@@ -119,30 +119,30 @@ def run(paths):
 
 
 @cli.command("ignore")
+@click.option("-s", "strings", is_flag=True, help="Add specific strings to ignore list (default)")
 @click.option("-f", "files", is_flag=True, help="Add files to ignore list (default)")
 @click.option("-d", "dirs", is_flag=True, help="Add directories to ignore list")
 @click.option("-t", "types", is_flag=True, help="Add file types to ignore list")
-@click.option("-s", "strings", is_flag=True, help="Add specific strings to ignore list")
-@click.option("-i", "interactive", is_flag=True, help="Interactive mode")
+@click.option("-i", "index", is_flag=True, help="Add word by index in previous run")
 @click.argument("values", nargs=-1)
-def ignore(files, dirs, types, strings, interactive, values):
-    if interactive:
+def ignore(strings, files, dirs, types, index, values):
+    if index:
         raise NotImplementedError
-    entry_type = _select_entry_type(files, dirs, types, strings)
+    entry_type = _select_entry_type(strings, files, dirs, types)
     _edit_ignore_entries(entry_type, mode=MODE.ADD, values=list(values))
 
 
 @cli.command("unignore")
-@click.option("-f", "files", is_flag=True, help="Add files to ignore list (default)")
-@click.option("-d", "dirs", is_flag=True, help="Add directories to ignore list")
-@click.option("-t", "types", is_flag=True, help="Add file types to ignore list")
-@click.option("-s", "strings", is_flag=True, help="Add specific strings to ignore list")
-@click.option("-i", "interactive", is_flag=True, help="Interactive mode")
+@click.option("-s", "strings", is_flag=True, help="Remove specific strings from ignore list (default)")
+@click.option("-f", "files", is_flag=True, help="Remove files from list")
+@click.option("-d", "dirs", is_flag=True, help="Remove directories from ignore list")
+@click.option("-t", "types", is_flag=True, help="Remove file types from ignore list")
+@click.option("-i", "index", is_flag=True, help="Remove word by index in previous run")
 @click.argument("values", nargs=-1)
-def unignore(files, dirs, types, strings, interactive, values):
-    if interactive:
+def unignore(strings, files, dirs, types, index, values):
+    if index:
         raise NotImplementedError
-    entry_type = _select_entry_type(files, dirs, types, strings)
+    entry_type = _select_entry_type(strings, files, dirs, types)
     _edit_ignore_entries(entry_type, mode=MODE.SUBTRACT, values=list(values))
 
 

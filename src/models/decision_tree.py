@@ -121,6 +121,13 @@ sonority = {
 alphabet = list("abcdefghijklmnopqrstuvwxyz")
 short_words = alphabet + ["".join(x) for x in combinations_with_replacement(alphabet, 2)]
 
+snippet_words_df = list(pd.read_csv("data/context_words.csv"))
+
+english_words = set()
+
+with open("data/words.txt", "r") as f:
+    for line in f.readlines():
+        english_words.add(line.strip().casefold())
 
 def get_vowel_indices(word: str) -> list[int]:
     indices = []
@@ -317,10 +324,9 @@ def get_features(s: str) -> tuple[float | bool, ...]:
 
     # contains a real word
     real_words_contained = 0
-    with open("data/words.txt", "r") as f:
-        for line in f.readlines():
-            if line.strip().casefold() in s.casefold():
-                real_words_contained += 1
+    for word in english_words:
+        if word in s.casefold():
+            real_words_contained += 1
     features.append(real_words_contained)
 
     # check SSG
@@ -341,8 +347,8 @@ def make_tree():
         header=None,
         names=["text", "label"],
     ).sample(100000)
-    texts = df["text"].astype(str).tolist() + short_words
-    labels = df["label"].astype(int).tolist() + [0 for _ in short_words]
+    texts = df["text"].astype(str).tolist() + short_words + snippet_words_df
+    labels = df["label"].astype(int).tolist() + [0 for _ in short_words] + [0 for _ in snippet_words_df]
     # labels = [y > 0 for y in labels]
 
     start = datetime.now()
