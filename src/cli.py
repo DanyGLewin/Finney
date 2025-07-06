@@ -1,5 +1,7 @@
+import math
 import os
 import pickle
+from collections import defaultdict
 from enum import Enum
 from hashlib import sha256
 from typing import Sequence
@@ -43,7 +45,7 @@ def _load_ignore_config() -> IgnoreConfig:
 
 
 def _edit_ignore_entries(
-    entry_type: ENTRY_TYPE, mode: MODE, values: Sequence[str]
+        entry_type: ENTRY_TYPE, mode: MODE, values: Sequence[str]
 ) -> None:
     prev_config = _load_ignore_config()
 
@@ -71,10 +73,10 @@ def _edit_ignore_entries(
 
 
 def _select_entry_type(
-    strings: bool, files: bool, dirs: bool, types: bool
+        strings: bool, files: bool, dirs: bool, types: bool, index: bool
 ) -> ENTRY_TYPE:
     if sum([strings, files, dirs, types]) > 1:
-        raise click.UsageError("Options -s, -f, -d, and -t are mutually exclusive")
+        raise click.UsageError("Options -s, -f, -d, -t, and -i are mutually exclusive")
 
     elif types:
         return ENTRY_TYPE.TYPES
@@ -85,6 +87,12 @@ def _select_entry_type(
     elif dirs:
         return ENTRY_TYPE.DIRS
 
+    elif index:
+        return ENTRY_TYPE.STRINGS
+
+    elif strings:
+        return ENTRY_TYPE.STRINGS
+
     else:
         return ENTRY_TYPE.STRINGS
 
@@ -94,17 +102,49 @@ def _save_last_matches(matches: Sequence[Match]) -> None:
         pickle.dump(matches, f)
 
 
+def _load_last_matches(indices: Sequence[int]) -> Sequence[str]:
+    selected_matches = []
+    with open(last_matches_path, "rb") as f:
+        matches: list[Match] = pickle.load(f)
+    for index in indices:
+        selected_matches.append(matches[index - 1].match)
+    return selected_matches
+
+
 @click.group()
 def cli():
     pass
 
 
+def _matches_by_file(matches: Sequence[Match]) -> dict[str, list[Match]]:
+    out = defaultdict(list)
+    for match in matches:
+        out[str(match.path)].append(match)
+    return out
+
+
+def _print_match_group(matches: Sequence[Match], start: int) -> None:
+    click.secho(f"  {matches[0].path}:", fg="red")
+    i = start
+    longest = max([len(m) for m in matches])
+    for match in matches:
+        click.secho(f"    {i:>2}: {match.render(longest)}", fg="red")
+        i += 1
+
+
 def _pretty_print(matches: Sequence[Match]) -> None:
+    match_groups = _matches_by_file(matches)
+    matches_str = f"{len(matches)} {'secrets' if len(matches) > 1 else 'secret'}"
+    files_str = f"{len(match_groups)} {'files' if len(match_groups) > 1 else 'group'}"
     click.secho(
-        f"Found {len(matches)} {'secrets' if len(matches) > 1 else 'secret'}:", fg="red"
+        f"Found {matches_str} in {files_str}:",
+        fg="red"
     )
-    for i, match in enumerate(matches, start=1):
-        click.secho(f"  {i:>2} | {match}", fg="red")
+    index = 1
+    for path, group in match_groups.items():
+        _print_match_group(group, index)
+        index += len(group)
+        print()
 
 
 @cli.command()
@@ -127,8 +167,9 @@ def run(paths):
 @click.argument("values", nargs=-1)
 def ignore(strings, files, dirs, types, index, values):
     if index:
-        raise NotImplementedError
-    entry_type = _select_entry_type(strings, files, dirs, types)
+        indices = [int(s) for s in values]
+        values = _load_last_matches(indices)
+    entry_type = _select_entry_type(strings, files, dirs, types, index)
     _edit_ignore_entries(entry_type, mode=MODE.ADD, values=list(values))
 
 
@@ -141,8 +182,9 @@ def ignore(strings, files, dirs, types, index, values):
 @click.argument("values", nargs=-1)
 def unignore(strings, files, dirs, types, index, values):
     if index:
-        raise NotImplementedError
-    entry_type = _select_entry_type(strings, files, dirs, types)
+        indices = [int(s) for s in values]
+        values = _load_last_matches(indices)
+    entry_type = _select_entry_type(strings, files, dirs, types, index)
     _edit_ignore_entries(entry_type, mode=MODE.SUBTRACT, values=list(values))
 
 

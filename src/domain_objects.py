@@ -24,6 +24,12 @@ class Match:
     def file(self):
         return self.path.name
 
+    def __len__(self):
+        return len(self.match) + 4
+
+    def render(self, length):
+        return "." * (length - len(str(self.match))) + " '" + self.match + "'"
+
 
 @dataclass
 class IgnoreConfig:
