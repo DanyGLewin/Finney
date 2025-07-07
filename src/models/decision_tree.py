@@ -18,7 +18,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import train_test_split
 
-pattern = r"""(["'`])[a-zA-Z0-9&*!?.\-_#%@^&$"'`{} ()\[\]]+\1"""
+candidate_pattern = r"""(["'`])[a-zA-Z0-9&*!?.\-_#%@^&$"'`{} ()\[\]]+\1"""
 
 # Define coordinates for QWERTY keyboard keys
 # Approximate positions:
@@ -75,14 +75,14 @@ def has_consecutive_sequence(s: str, seq_len: int = 3) -> bool:
         # all letters?
         if all(ch in string.ascii_lowercase for ch in substr):
             if all(
-                ord(substr[j + 1]) - ord(substr[j]) == 1 for j in range(seq_len - 1)
+                ord(substr[j + 1]) - ord(substr[j]) in (1, -1) for j in range(seq_len - 1)
             ):
                 return True
 
         # all digits?
         if all(ch.isdigit() for ch in substr):
             if all(
-                int(substr[j + 1]) - int(substr[j]) == 1 for j in range(seq_len - 1)
+                int(substr[j + 1]) - int(substr[j]) in (1, -1) for j in range(seq_len - 1)
             ):
                 return True
 
@@ -189,7 +189,7 @@ def extract_candidates_from_file(path):
     with open(path, "r") as f:
         candidates = []
         for line in f.readlines():
-            if match := re.search(pattern, line):
+            if match := re.search(candidate_pattern, line):
                 candidates.append(match.group()[1:-1])
     return candidates
 
@@ -252,7 +252,13 @@ def get_features(s: str) -> tuple[float | bool, ...]:
     vowels = len(re.findall(r"[aeiou]", s.lower()))
     features.append(vowels / len(s))
 
-    # longest hexadeximal sequence
+    # is entirely hexadecimal
+    if re.match(r"^[0-9a-fA-F]+$", s):
+        features.append(True)
+    else:
+        features.append(False)
+
+    # longest hexadecimal sequence
     hexas = re.findall(r"[0-9a-fA-F]+", s) or [""]
     longest = max([len(x) for x in hexas])
     features.append(longest)
@@ -328,6 +334,12 @@ def get_features(s: str) -> tuple[float | bool, ...]:
         if word in s.casefold():
             real_words_contained += 1
     features.append(real_words_contained)
+
+    # is a real word
+    if s.casefold() in english_words:
+        features.append(True)
+    else:
+        features.append(False)
 
     # check SSG
     # features.append(follows_ssg(s))
