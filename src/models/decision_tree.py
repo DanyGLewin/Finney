@@ -1,3 +1,4 @@
+import dataclasses
 import math
 import pickle
 import re
@@ -5,10 +6,15 @@ import string
 import time
 from datetime import datetime
 from itertools import combinations_with_replacement
+from typing import Self
 
+import numpy as np
 import pandas as pd
 from dateutil import parser
+from optree.dataclasses import dataclass
+from scipy.ndimage import label
 from sklearn import tree, ensemble
+import xgboost as xgb
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
@@ -18,7 +24,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import train_test_split
 
-candidate_pattern = r"""(["'`])[a-zA-Z0-9&*!?.\-_#%@^&$"'`{} ()\[\]]+\1"""
+candidate_pattern = r"""(["'`])[a-zA-Z0-9&*!?.\-_#%@^&$"'`{} ()\[\]]{6,30}\1"""
 
 # Define coordinates for QWERTY keyboard keys
 # Approximate positions:
@@ -57,6 +63,8 @@ def average_key_distance(input_string: str) -> float:
     if len(coords) < 2:
         return 0.0
 
+    y = "sk_live_[0-9a-zA-Z]{24}"
+
     distances = []
     for (x1, y1), (x2, y2) in zip(coords, coords[1:]):
         dist = math.hypot(x2 - x1, y2 - y1)
@@ -70,19 +78,19 @@ def has_consecutive_sequence(s: str, seq_len: int = 3) -> bool:
     n = len(s_lower)
 
     for i in range(n - seq_len + 1):
-        substr = s_lower[i : i + seq_len]
+        substr = s_lower[i: i + seq_len]
 
         # all letters?
         if all(ch in string.ascii_lowercase for ch in substr):
             if all(
-                ord(substr[j + 1]) - ord(substr[j]) in (1, -1) for j in range(seq_len - 1)
+                    ord(substr[j + 1]) - ord(substr[j]) in (1, -1) for j in range(seq_len - 1)
             ):
                 return True
 
         # all digits?
         if all(ch.isdigit() for ch in substr):
             if all(
-                int(substr[j + 1]) - int(substr[j]) in (1, -1) for j in range(seq_len - 1)
+                    int(substr[j + 1]) - int(substr[j]) in (1, -1) for j in range(seq_len - 1)
             ):
                 return True
 
@@ -124,10 +132,35 @@ short_words = alphabet + ["".join(x) for x in combinations_with_replacement(alph
 snippet_words_df = list(pd.read_csv("data/context_words.csv"))
 
 english_words = set()
-
 with open("data/words.txt", "r") as f:
     for line in f.readlines():
         english_words.add(line.strip().casefold())
+temp = "|".join(map(re.escape, english_words))
+english_pattern = re.compile(rf"\b({temp})\b")
+
+keywords = set()
+with open("data/keywords.txt", "r") as f:  # taken from https://github.com/e3b0c442/keywords?tab=readme-ov-file
+    for line in f.readlines():  # and from https://www.ibm.com/docs/en/i/7.6.0?topic=extensions-standard-c-library-functions-table-by-name
+        keywords.add(line.strip().casefold())
+temp = "|".join(map(re.escape, keywords))
+keyword_pattern = re.compile(rf"\b({temp})\b")
+
+
+extensions = set()  # taken from https://gist.github.com/securifera/e7eed730cbe1ce43d0c29d7cd2d582f4
+with open("data/extensions.txt", "r") as f:
+    for line in f.readlines():
+        extensions.add(line.strip().casefold())
+temp = "|".join(map(re.escape, extensions))
+file_type_pattern = re.compile(rf"({temp})$")
+
+
+domains = set()  # taken from https://github.com/datasets/top-level-domain-names/blob/main/data/top-level-domain-names.csv?plain=1
+with open("data/domains.txt", "r") as f:
+    for line in f.readlines():
+        domains.add(line.strip().casefold())
+temp = "|".join(map(re.escape, domains))
+url_pattern = re.compile(rf"({temp})\b")
+
 
 def get_vowel_indices(word: str) -> list[int]:
     indices = []
@@ -139,9 +172,9 @@ def get_vowel_indices(word: str) -> list[int]:
 
 def check_vowel_context(word: str, index) -> int:
     # Left context: max 2 chars, but not before start
-    left_context = word[max(0, index - 2) : index]
+    left_context = word[max(0, index - 2): index]
     # Right context: up to 2 chars, slicing handles end-of-word
-    right_context = word[index + 1 : index + 3]
+    right_context = word[index + 1: index + 3]
 
     violations = 0
 
@@ -149,11 +182,11 @@ def check_vowel_context(word: str, index) -> int:
         if left_context[0] in "aeiouy" or left_context[1] in "aeiouy":
             ...
         elif (
-            index == 2 and left_context[0] == "s"
+                index == 2 and left_context[0] == "s"
         ):  # s is allways allowed to start an onset in english
             ...
         elif (
-            sonority[left_context[1]] < sonority[left_context[0]]
+                sonority[left_context[1]] < sonority[left_context[0]]
         ):  # "rka" is bad "kra" is good
             violations += 1
 
@@ -194,11 +227,59 @@ def extract_candidates_from_file(path):
     return candidates
 
 
+def get_char_types_mask(s: str) -> list[int]:
+    l = []
+    for c in s:
+        if c.lower() in "abcdefjhijklmnopqrstuvwxyz":
+            l.append(0)
+        elif c.isdigit():
+            l.append(1)
+        else:
+            l.append(2)
+    return l
+
+
+@dataclasses.dataclass
+class Score:
+    eta: float
+    n_estimators: int
+    max_depth: int
+    samples: int
+    accuracy: float
+    precision: float
+    recall: float
+    f1: float
+
+    @staticmethod
+    def avg(scores: list['Self']):
+        return Score(
+            eta=scores[0].eta,
+            n_estimators=scores[0].n_estimators,
+            max_depth=scores[0].max_depth,
+            samples=scores[0].samples,
+            accuracy=sum([sc.accuracy for sc in scores]) / len(scores),
+            precision=sum([sc.precision for sc in scores]) / len(scores),
+            recall=sum([sc.recall for sc in scores]) / len(scores),
+            f1=sum([sc.f1 for sc in scores]) / len(scores),
+        )
+
+    #     def __str__(self):
+    #         return f"""eta={self.eta}, n_estimators={self.n_estimators}, max_depth={self.max_depth}
+    #   Accuracy:  {self.accuracy}
+    #   Precision: {self.precision}
+    #   Recall:    {self.recall}
+    #   F1:        {self.f1}
+    # """
+
+    def __str__(self):
+        return f"{self.eta},{self.n_estimators},{self.max_depth},{self.samples},{self.accuracy},{self.precision},{self.recall},{self.f1}"
+
+
 def get_features(s: str) -> tuple[float | bool, ...]:
     features = []
 
     # contains special character
-    for c in "!@#$%^&*()_+[]'\";/.,?><\\|{}":
+    for c in "!@#$^&*()_+[]'\";/,><\\|{}":
         if c in s:
             features.append(True)
             break
@@ -206,10 +287,6 @@ def get_features(s: str) -> tuple[float | bool, ...]:
         features.append(False)
 
     features.append(len(s))
-    features.append(len(s) > 4)
-    features.append(len(s) > 8)
-    features.append(len(s) > 16)
-    features.append(len(s) > 32)
 
     # starts with capital letter
     if s[0] in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
@@ -218,10 +295,10 @@ def get_features(s: str) -> tuple[float | bool, ...]:
         features.append(False)
 
     # is all capslock
-    if re.match("[^A-Z]", s):
-        features.append(False)
-    else:
-        features.append(True)
+    # if re.match("[^A-Z]", s):
+    #     features.append(False)
+    # else:
+    #     features.append(True)
 
     # longest capital sequence
     caps = re.findall(r"[A-Z]+", s) or [""]
@@ -234,7 +311,7 @@ def get_features(s: str) -> tuple[float | bool, ...]:
     features.append(longest / len(s))
 
     # longest consonant sequence
-    caps = re.findall(r"[bcdfghjklmnpqrstvwxyz]+", s.lower()) or [""]
+    caps = re.findall(r"[bcdfghjklmnpqrstvxz]+", s.lower()) or [""]
     longest = max([len(x) for x in caps])
     features.append(longest / len(s))
 
@@ -243,6 +320,12 @@ def get_features(s: str) -> tuple[float | bool, ...]:
         features.append(True)
     else:
         features.append(False)
+
+    # contains a space
+    # if " " in s:
+    #     features.append(True)
+    # else:
+    #     features.append(False)
 
     # fraction of the string that's digits
     digits = len(re.findall(r"\d", s))
@@ -272,51 +355,64 @@ def get_features(s: str) -> tuple[float | bool, ...]:
     symbols = len(re.findall(r"\W", s))
     features.append(symbols / len(s))
     # see if there's any symbols at all
-    features.append(symbols > 0)
+    # features.append(symbols > 0)
 
-    # is made up of words split by underscores
-    if re.match(r"[a-zA-Z]+(_[a-zA-Z_]+)+", s):
-        features.append(True)
+    # is in special format:
+    # snake_case
+    if re.match(r"^[a-zA-Z]+(_[a-zA-Z_]+)+$", s):
+        features.append(1)
+    # UpperCamel
+    elif re.match(r"^([A-Z][a-z]+)+$", s):
+        features.append(2)
+    # lowerCamel
+    elif re.match(r"^([A-Z]?[a-z]+)+$", s):
+        features.append(3)
+    # kebab-case
+    elif re.match(r"^[a-zA-Z]+(-[a-zA-Z\-]+)+$", s):
+        features.append(4)
+    # ALLCAPS
+    elif re.match(r"^[A-Z]+$", s):
+        features.append(5)
     else:
-        features.append(False)
+        features.append(0)
 
     # has escaped characters
-    if re.match(r"\\{2}\w{3,4}(?!\w)", s):
+    if re.match(r"\\{1,2}\w{3,4}(?!\w)", s):
         features.append(True)
     else:
         features.append(False)
 
     # has \n
-    if re.match(r"\\n", s):
+    if re.search(r"\\n", s):
         features.append(True)
     else:
         features.append(False)
 
-    # has file path characters
-    if re.match(r"/\.", s) or re.match(r"\./", s):
+    # is a relative path
+    if re.match(r"(^/\./)|(^\./)", s):
         features.append(True)
     else:
         features.append(False)
 
-    # has file path characters
-    if re.match(r"/\.\.", s) or re.match(r"\.\./", s):
+    # is a relative path from parent
+    if re.match(r"(^/\.\./)|(^\.\./)", s):
         features.append(True)
     else:
         features.append(False)
 
     # is of format [letters][numbers][symbol] or [letters][symbol][numbers]
-    if re.match(r"[A-Za-z]+[0-9]+\W?", s):
+    if re.match(r"^[A-Za-z]+[0-9]+\W?$", s):
         features.append(True)
     else:
         features.append(False)
 
-    if re.match(r"[A-Za-z]+\W?[0-9]+", s):
+    if re.match(r"^[A-Za-z]+\W?[0-9]+$", s):
         features.append(True)
     else:
         features.append(False)
 
     # contains a birth year
-    for group in re.findall(r"\d{4}", s):
+    for group in re.findall(r"(?<!\d)\d{4}(?!\d)", s):
         if 1900 < int(group) < 2100:
             features.append(True)
             break
@@ -328,15 +424,63 @@ def get_features(s: str) -> tuple[float | bool, ...]:
     else:
         features.append(False)
 
+    # contains html/xml tag
+    if re.search(r"<.{1,3}>", s):
+        features.append(True)
+    else:
+        features.append(False)
+
     # contains a real word
-    real_words_contained = 0
-    for word in english_words:
-        if word in s.casefold():
-            real_words_contained += 1
-    features.append(real_words_contained)
+    words_contained = re.findall(english_pattern, s.casefold())
+    features.append(len(words_contained))
 
     # is a real word
-    if s.casefold() in english_words:
+    if re.fullmatch(english_pattern, s.casefold()):
+        features.append(True)
+    else:
+        features.append(False)
+
+    # contains a programming keyword
+    keywords_contained = re.findall(keyword_pattern, s.casefold())
+    features.append(len(keywords_contained))
+
+    # # is a keyword
+    if re.fullmatch(keyword_pattern, s):
+        features.append(True)
+    else:
+        features.append(False)
+
+    # has specific programming syntax symbols
+    for symbol in [".", "::", "?", "%", "->", "__", "==", "===", "//", "\\", "\\\\", "\n"]:
+        if symbol in s:
+            features.append(True)
+        else:
+            features.append(False)
+
+    # ends with file extension
+    if re.search(file_type_pattern, s):
+        features.append(True)
+    else:
+        features.append(False)
+
+    # is likely a url
+    if re.search(url_pattern, s):
+        features.append(True)
+    else:
+        features.append(False)
+
+    # has balanced parentheses
+    if (s.count("(") > 0) and (s.count("(") == s.count(")")):
+        features.append(True)
+    else:
+        features.append(False)
+
+    if (s.count("[") > 0) and (s.count("[") == s.count("]")):
+        features.append(True)
+    else:
+        features.append(False)
+
+    if (s.count("{") > 0) and (s.count("{") == s.count("}")):
         features.append(True)
     else:
         features.append(False)
@@ -350,78 +494,126 @@ def get_features(s: str) -> tuple[float | bool, ...]:
     # consecutive letters
     features.append(has_consecutive_sequence(s))
 
-    return tuple(features)
+    types_mask = get_char_types_mask(s)
+
+    # number of switches between character types
+    n = 0
+    for i in range(len(s) - 1):
+        if types_mask[i] != types_mask[i + 1]:
+            n += 1
+    features.append(n)
+
+    # return tuple(features)
+    return np.array(features)
 
 
-def make_tree():
+def make_tree(samples: int, eta: float, max_depth: int, n_estimators: int, save: bool = True):
     df = pd.read_csv(
-        "/Users/danylewin/thingies/university/CS Workshop/SecretSearcher/data/PassFInder_Password_Dataset/password_test.csv",
+        "/Users/danylewin/thingies/university/CS Workshop/Finney/data/PassFInder_Password_Dataset/password_test.csv",
         header=None,
         names=["text", "label"],
-    ).sample(100000)
+    ).sample(samples)
     texts = df["text"].astype(str).tolist() + short_words + snippet_words_df
     labels = df["label"].astype(int).tolist() + [0 for _ in short_words] + [0 for _ in snippet_words_df]
-    # labels = [y > 0 for y in labels]
+    labels = [y > 0 for y in labels]
 
-    start = datetime.now()
-    print(
-        f"Starting to parse features at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    )
     features = [get_features(text) for text in texts]
-    print(
-        f"Finished parsing features at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    )
-    print(f"Took {datetime.now() - start}")
 
     texts_train, texts_test, X_train, X_test, y_train, y_test = train_test_split(
-        texts, features, labels, test_size=0.2, random_state=42
+        texts, features, labels, test_size=0.2
     )
 
     train_start = datetime.now()
-    print(f"Starting to train model at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     # clf = tree.DecisionTreeClassifier()
-    clf = ensemble.RandomForestClassifier(n_estimators=200)
+    # clf = ensemble.RandomForestClassifier(n_estimators=500)
+    clf = xgb.XGBClassifier(max_depth=max_depth, n_estimators=n_estimators, eta=eta)
 
-    clf = clf.fit(X_train, y_train)  # train the model
-    print(f"Finished training model at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Took {datetime.now() - train_start}")
+    clf = clf.fit(np.array(X_train), np.array(y_train))  # train the model
 
+    y_test = np.array(y_test)
     preds = clf.predict(X_test)
-    accuracy = accuracy_score(y_test, preds)
-    precision = precision_score(y_test, preds, average="macro")
-    recall = recall_score(y_test, preds, average="macro")
-    f1 = f1_score(y_test, preds, average="macro")
-    print("Performance metrics:")
-    print(f"  Accuracy: {accuracy}")
-    print(f"  Precision: {precision}")
-    print(f"  Recall: {recall}")
-    print(f"  F1: {f1}")
+    accuracy = accuracy_score(y_test > 0, preds > 0)
+    precision = precision_score(y_test > 0, preds > 0, average="macro")
+    recall = recall_score(y_test > 0, preds > 0, average="macro")
+    f1 = f1_score(y_test > 0, preds > 0, average="macro")
 
-    with open("src/models/tree.pkl", "wb") as f:
-        pickle.dump(clf, f)
+    score = Score(
+        eta=eta,
+        max_depth=max_depth,
+        n_estimators=n_estimators,
+        samples=samples,
+        accuracy=accuracy,
+        precision=precision,
+        recall=recall,
+        f1=f1,
+    )
+    # print("Performance metrics:")
+    # print(f"  {accuracy}")
+    # print(f"  {precision}")
+    # print(f"  {recall}")
+    # print(f"  {f1}")
+
+    if save:
+        with open("src/models/tree.pkl", "wb") as f:
+            pickle.dump(clf, f)
+            time.sleep(0.5)
 
     df = pd.DataFrame(texts_test)
     df["y_true"] = y_test
-    df["y_pred"] = preds
+    df["y_pred"] = preds.astype(bool)
     errors = df[df["y_true"] != df["y_pred"]]
 
-    return errors, confusion_matrix(df["y_true"], df["y_pred"])
+    return score
 
 
 def predict(words):
     with open("src/models/tree.pkl", "rb") as f:
         tree = pickle.load(f)
-    res = tree.predict([get_features(word) for word in words])
+    features = [get_features(word) for word in words]
+    res = tree.predict_proba(np.array(features))
     return res
 
 
-def scan(path):
-    candidates = extract_candidates_from_file(path)
-    preds = predict(candidates)
-    return [candidates[i] for i, guess in enumerate(preds) if guess]
+def clean_results(pred_weights, threshold):
+    cond1 = pred_weights[:, 0] < threshold
+    cond2 = pred_weights[:, 0] != pred_weights.max(axis=1)
+    mask = cond1 & cond2
+    indices = np.where(mask)[0].tolist()
+    return indices
+
+
+def scan(path, threshold=0.2):
+    try:
+        candidates = extract_candidates_from_file(path)
+    except:
+        return []
+    if not candidates:
+        return []
+    pred_weights = predict(candidates)
+    results = clean_results(pred_weights, threshold)
+
+    return [candidates[i] for i, guess in enumerate(results) if guess]
 
 
 if __name__ == "__main__":
-    errors, confusion_matrix = make_tree()
-    print(errors)
-    print(confusion_matrix)
+    with open("scores.csv", "a") as f:
+        f.write("eta,n_estimators,max_depth,samples,accuracy,precision,recall,f1\n")
+    for eta in [0.02]:
+        for max_depth in [15]:
+            for n_estimators in [1000]:
+                scores = []
+                samples = 10_000_000
+                print(f"Running for {n_estimators=} {max_depth=} {eta=} {samples=}", end=" ")
+                start = datetime.now()
+                for i in range(3):
+                    print(i + 1, end=" ")
+                    scores.append(make_tree(
+                        eta=eta,
+                        max_depth=max_depth,
+                        n_estimators=n_estimators,
+                        samples=samples,
+                    ))
+                    avg = Score.avg(scores)
+                    with open("scores.csv", "a") as f:
+                        f.write(str(avg) + "\n")
+                print(f"took: {datetime.now() - start}")

@@ -4,9 +4,13 @@ import pickle
 from collections import defaultdict
 from enum import Enum
 from hashlib import sha256
+from pathlib import Path
 from typing import Sequence
 
 import click
+from rich.console import Console
+from rich.table import Table
+from rich import box
 import yaml
 
 import search
@@ -20,12 +24,21 @@ class ENTRY_TYPE(Enum):
     STRINGS = "STRINGS"
     FILES = "FILES"
     DIRS = "DIRS"
-    TYPES = "SUFFIXES"
+    TYPES = "SUFFIXES"  # finney: ignore
 
 
 class MODE(Enum):
     ADD = "ADD"
     SUBTRACT = "SUBTRACT"
+
+
+def _get_recursive_paths(paths: list[str]) -> list[str]:
+    files = []
+    for dir_path in paths:
+        path = Path(dir_path)
+        if path.is_dir():
+            files.extend(str(p) for p in path.rglob('*') if p.is_file())
+    return files
 
 
 def _load_ignore_config() -> IgnoreConfig:
@@ -70,6 +83,10 @@ def _edit_ignore_entries(
             default_flow_style=False,
             sort_keys=False,
         )
+    if mode == MODE.ADD:
+        print(f"Added {len(values)} entries to ignore list")
+    else:
+        print(f"Removed {len(values)} entries from ignore list")
 
 
 def _select_entry_type(
@@ -123,39 +140,63 @@ def _matches_by_file(matches: Sequence[Match]) -> dict[str, list[Match]]:
     return out
 
 
-def _print_match_group(matches: Sequence[Match], start: int) -> None:
-    click.secho(f"  {matches[0].path}:", fg="red")
+def _print_match_group(matches: list[Match], start: int) -> None:
+    matches.sort(key=lambda x: x.line)
+    table = Table(box=box.MINIMAL)
+    print(f"In file: {matches[0].path}")
+    table.add_column("Line", justify="right")
+    table.add_column("Suspected Secret", justify="left")
+    table.add_column("ID", justify="right")
+
     i = start
-    longest = max([len(m) for m in matches])
-    for match in matches:
-        click.secho(f"    {i:>2}: {match.render(longest)}", fg="red")
+    for m in matches:
+        table.add_row(str(m.line), m.match, str(i))
         i += 1
+
+    console = Console()
+    console.print(table)
+    print(f"In file: {matches[0].path}")
+
 
 
 def _pretty_print(matches: Sequence[Match]) -> None:
     match_groups = _matches_by_file(matches)
     matches_str = f"{len(matches)} {'secrets' if len(matches) > 1 else 'secret'}"
     files_str = f"{len(match_groups)} {'files' if len(match_groups) > 1 else 'group'}"
-    click.secho(
-        f"Found {matches_str} in {files_str}:",
-        fg="red"
-    )
     index = 1
-    for path, group in match_groups.items():
+    click.secho(
+        f"Found suspected {matches_str} in {files_str}:\n"
+    )
+    for path, group in sorted(match_groups.items(), key=lambda item: item[1][0].path):
         _print_match_group(group, index)
         index += len(group)
         print()
+    print("""If these are real secrets, consider removing them from your code before committing.
+If they aren't, you can mark them as safe in the following ways:
+- Ignore specific strings explicity:
+    finney ignore [STRINGS...]
+    
+- Ignore specific strings by ID:
+    finney ignore -i [ID...]
+    
+- Ignore entire files:
+    finney ignore -f [FILE_NAME...]""")
 
 
 @cli.command()
 @click.argument("paths", nargs=-1)
-def run(paths):
+@click.option("-r", "recursive", is_flag=True, default=False)
+def run(paths, recursive):
     ignored = _load_ignore_config()
+    if recursive:
+        paths = _get_recursive_paths(paths)
     matches: Sequence[Match] = search.scan_files(paths, ignored)
+
     if matches:
         _pretty_print(matches)
         _save_last_matches(matches)
         exit(1)
+    print("Finney didn't find any suspected secrets :D")
 
 
 @cli.command("ignore")

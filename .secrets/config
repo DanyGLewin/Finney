@@ -12,5 +12,12 @@ ignore:
     - .pyc
     - .pack
     - .pkl
+    - .cat
+    - .png
+    - .icns
     strings:
     - b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9
+    - b3592d1c43c9218781e3540ebf84d5f9edf06abbb06a3d6850cc9263fd8769ba
+    - 8e41352264172ab4e9b26404217084ecee002f1b51bd7d9c78fbcb3dd5d82425
+    - 57a38108d507a87f67ab2983aa7379258e3e241125e89d9d8c45969906f50dfc
+    - cec8879394a4de86a819d10c456b59d3db69ca9277ce9b73ab7b338bb66cea66

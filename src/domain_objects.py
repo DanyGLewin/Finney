@@ -12,9 +12,10 @@ def _sub(l1, l2):
 class Match:
     path: Path
     match: str
+    line: int = 0
 
     def __str__(self):
-        return f"{self.path}: '{self.match}'"
+        return f"{self.path}:{self.line:0>3}: '{self.match}'"
 
     @property
     def sha(self):
@@ -29,6 +30,12 @@ class Match:
 
     def render(self, length):
         return "." * (length - len(str(self.match))) + " '" + self.match + "'"
+
+    def __eq__(self, other):
+        return self.path == other.path and self.match == other.match
+
+    def __hash__(self):
+        return hash(self.path.name + self.match)
 
 
 @dataclass
