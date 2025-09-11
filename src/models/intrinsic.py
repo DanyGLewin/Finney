@@ -1,5 +1,4 @@
 import re
-from hashlib import sha256
 from pathlib import Path
 
 from domain_objects import IgnoreConfig
@@ -39,9 +38,7 @@ def scan(file_path: Path, ignored: IgnoreConfig) -> list[str]:
     for regex in regexes:
         if mo := re.search(regex, data):
             match_str = mo.group()
-            match_bytes = match_str.encode("utf-8")
-            match_hash = sha256(match_bytes).hexdigest()
-            if match_str in ignored.strings or match_hash in ignored.strings or "\n" in match_str:
+            if match_str in ignored.strings or "\n" in match_str:
                 continue
             matches.append(match_str)
     return matches

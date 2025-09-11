@@ -67,3 +67,27 @@ class IgnoreConfig:
 
     def to_dict(self):
         return self.__dict__
+
+    def print(self):
+        if self.dirs:
+            print("Directories:")
+            for dir in self.dirs:
+                print(f" - {dir}")
+            print()
+
+        if self.files:
+            print("Files:")
+            for f in self.files:
+                print(f" - {f}")
+            print()
+
+        if self.types:
+            print("File Types:")
+            for t in self.types:
+                print(f" - {t}")
+            print()
+
+        if self.strings:
+            print("Strings:")
+            for s in self.strings:
+                print(f" - {s}")

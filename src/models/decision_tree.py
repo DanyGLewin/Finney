@@ -10,14 +10,9 @@ from typing import Self
 
 import numpy as np
 import pandas as pd
-from dateutil import parser
-from optree.dataclasses import dataclass
-from scipy.ndimage import label
-from sklearn import tree, ensemble
 import xgboost as xgb
 from sklearn.metrics import (
     accuracy_score,
-    confusion_matrix,
     precision_score,
     recall_score,
     f1_score,
@@ -145,14 +140,12 @@ with open("data/keywords.txt", "r") as f:  # taken from https://github.com/e3b0c
 temp = "|".join(map(re.escape, keywords))
 keyword_pattern = re.compile(rf"\b({temp})\b")
 
-
 extensions = set()  # taken from https://gist.github.com/securifera/e7eed730cbe1ce43d0c29d7cd2d582f4
 with open("data/extensions.txt", "r") as f:
     for line in f.readlines():
         extensions.add(line.strip().casefold())
 temp = "|".join(map(re.escape, extensions))
 file_type_pattern = re.compile(rf"({temp})$")
-
 
 domains = set()  # taken from https://github.com/datasets/top-level-domain-names/blob/main/data/top-level-domain-names.csv?plain=1
 with open("data/domains.txt", "r") as f:
@@ -262,14 +255,6 @@ class Score:
             recall=sum([sc.recall for sc in scores]) / len(scores),
             f1=sum([sc.f1 for sc in scores]) / len(scores),
         )
-
-    #     def __str__(self):
-    #         return f"""eta={self.eta}, n_estimators={self.n_estimators}, max_depth={self.max_depth}
-    #   Accuracy:  {self.accuracy}
-    #   Precision: {self.precision}
-    #   Recall:    {self.recall}
-    #   F1:        {self.f1}
-    # """
 
     def __str__(self):
         return f"{self.eta},{self.n_estimators},{self.max_depth},{self.samples},{self.accuracy},{self.precision},{self.recall},{self.f1}"

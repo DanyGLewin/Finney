@@ -1,4 +1,3 @@
-import math
 import os
 import pickle
 from collections import defaultdict
@@ -16,8 +15,12 @@ import yaml
 import search
 from domain_objects import Match, IgnoreConfig
 
-config_path = ".secrets/config"
-last_matches_path = ".secrets/log"
+root = ".finney"
+config_path = f"{root}/config"
+last_matches_path = f"{root}/matches"
+
+if not os.path.exists(root):
+    os.mkdir(root)
 
 
 class ENTRY_TYPE(Enum):
@@ -62,9 +65,16 @@ def _edit_ignore_entries(
 ) -> None:
     prev_config = _load_ignore_config()
 
-    if entry_type == ENTRY_TYPE.STRINGS:
-        byte_values = [val.encode("utf-8") for val in values]
-        values = [sha256(val).hexdigest() for val in byte_values]
+    if mode == MODE.ADD and entry_type == ENTRY_TYPE.STRINGS:
+        last_run_hashes = _load_last_matches()
+        temp = set(values)
+        for value in values:
+            hashed_value = sha256(value.encode("utf-8")).hexdigest()
+            if hashed_value not in last_run_hashes:
+                if not click.confirm(f"String {value} was not found in the last run. Are you sure you want to ignore it?", default=True, prompt_suffix="\n>>> "):
+                    temp.remove(value)
+        values = list(temp)
+
 
     added_config = IgnoreConfig(
         dirs=values if entry_type == ENTRY_TYPE.DIRS else [],
@@ -83,14 +93,15 @@ def _edit_ignore_entries(
             default_flow_style=False,
             sort_keys=False,
         )
+    entry_str = "entry" if len(values) == 1 else "entries"
     if mode == MODE.ADD:
-        print(f"Added {len(values)} entries to ignore list")
+        print(f"Added {len(values)} {entry_str} to ignore list")
     else:
-        print(f"Removed {len(values)} entries from ignore list")
+        print(f"Removed {len(values)} {entry_str} from ignore list")
 
 
 def _select_entry_type(
-        strings: bool, files: bool, dirs: bool, types: bool, index: bool
+        strings: bool, files: bool, dirs: bool, types: bool
 ) -> ENTRY_TYPE:
     if sum([strings, files, dirs, types]) > 1:
         raise click.UsageError("Options -s, -f, -d, -t, and -i are mutually exclusive")
@@ -104,9 +115,6 @@ def _select_entry_type(
     elif dirs:
         return ENTRY_TYPE.DIRS
 
-    elif index:
-        return ENTRY_TYPE.STRINGS
-
     elif strings:
         return ENTRY_TYPE.STRINGS
 
@@ -119,16 +127,15 @@ def _save_last_matches(matches: Sequence[Match]) -> None:
         pickle.dump(matches, f)
 
 
-def _load_last_matches(indices: Sequence[int]) -> Sequence[str]:
-    selected_matches = []
+def _load_last_matches() -> Sequence[str]:
+    if not os.path.exists(last_matches_path):
+        return []
     with open(last_matches_path, "rb") as f:
         matches: list[Match] = pickle.load(f)
-    for index in indices:
-        selected_matches.append(matches[index - 1].match)
-    return selected_matches
+    return [m.sha for m in matches]
 
 
-@click.group()
+@click.group(help="Scan your code repositories for hardcoded passwords and secrets")
 def cli():
     pass
 
@@ -140,36 +147,29 @@ def _matches_by_file(matches: Sequence[Match]) -> dict[str, list[Match]]:
     return out
 
 
-def _print_match_group(matches: list[Match], start: int) -> None:
+def _print_match_group(matches: list[Match]) -> None:
     matches.sort(key=lambda x: x.line)
     table = Table(box=box.MINIMAL)
     print(f"In file: {matches[0].path}")
     table.add_column("Line", justify="right")
     table.add_column("Suspected Secret", justify="left")
-    table.add_column("ID", justify="right")
 
-    i = start
     for m in matches:
-        table.add_row(str(m.line), m.match, str(i))
-        i += 1
+        table.add_row(str(m.line), m.match)
 
     console = Console()
     console.print(table)
-    print(f"In file: {matches[0].path}")
-
 
 
 def _pretty_print(matches: Sequence[Match]) -> None:
     match_groups = _matches_by_file(matches)
     matches_str = f"{len(matches)} {'secrets' if len(matches) > 1 else 'secret'}"
     files_str = f"{len(match_groups)} {'files' if len(match_groups) > 1 else 'group'}"
-    index = 1
     click.secho(
         f"Found suspected {matches_str} in {files_str}:\n"
     )
     for path, group in sorted(match_groups.items(), key=lambda item: item[1][0].path):
-        _print_match_group(group, index)
-        index += len(group)
+        _print_match_group(group)
         print()
     print("""If these are real secrets, consider removing them from your code before committing.
 If they aren't, you can mark them as safe in the following ways:
@@ -183,9 +183,9 @@ If they aren't, you can mark them as safe in the following ways:
     finney ignore -f [FILE_NAME...]""")
 
 
-@cli.command(help="Run finney on pathed files")
+@cli.command(help="Run Finney on the given files")
 @click.argument("paths", nargs=-1)
-@click.option("-r", "recursive", is_flag=True, default=False)
+@click.option("-r", "recursive", is_flag=True, default=False, help="Recursively search the given paths")
 def run(paths, recursive):
     ignored = _load_ignore_config()
     if recursive:
@@ -199,34 +199,32 @@ def run(paths, recursive):
     print("Finney didn't find any suspected secrets :D")
 
 
-@cli.command("ignore", help="Add values to ignore list")
-@click.option("-s", "strings", is_flag=True, help="Add specific strings to ignore list (default)")
-@click.option("-f", "files", is_flag=True, help="Add files to ignore list")
-@click.option("-d", "dirs", is_flag=True, help="Add directories to ignore list")
-@click.option("-t", "types", is_flag=True, help="Add file types to ignore list")
-@click.option("-i", "index", is_flag=True, help="Add word by index in previous run")
+@cli.command("ignore", help="Defined values that can be safely ignored")
+@click.option("-s", "strings", is_flag=True, help="Define specific strings as safe (default)")
+@click.option("-f", "files", is_flag=True, help="Define files that Finney won't scan")
+@click.option("-d", "dirs", is_flag=True, help="Define directories that Finney won't scan")
+@click.option("-t", "types", is_flag=True, help="Define file types (.exe, .jar, ...) that Finney won't scan")
 @click.argument("values", nargs=-1)
-def ignore(strings, files, dirs, types, index, values):
-    if index:
-        indices = [int(s) for s in values]
-        values = _load_last_matches(indices)
-    entry_type = _select_entry_type(strings, files, dirs, types, index)
+def ignore(strings, files, dirs, types, values):
+    entry_type = _select_entry_type(strings, files, dirs, types)
     _edit_ignore_entries(entry_type, mode=MODE.ADD, values=list(values))
 
 
-@cli.command("unignore", help="Remove values from ignore list")
-@click.option("-s", "strings", is_flag=True, help="Remove specific strings from ignore list (default)")
-@click.option("-f", "files", is_flag=True, help="Remove files from list")
-@click.option("-d", "dirs", is_flag=True, help="Remove directories from ignore list")
-@click.option("-t", "types", is_flag=True, help="Remove file types from ignore list")
-@click.option("-i", "index", is_flag=True, help="Remove word by index in previous run")
+@cli.command("unignore", help="Remove values from the ignore list.\nSee `finney ignore` for details`")
+@click.option("-s", "strings", is_flag=True, help="Remove strings from the ignored list (default)")
+@click.option("-f", "files", is_flag=True, help="Remove files from the ignored list")
+@click.option("-d", "dirs", is_flag=True, help="Remove directories from the ignore list")
+@click.option("-t", "types", is_flag=True, help="Remove file types from the ignore list")
 @click.argument("values", nargs=-1)
-def unignore(strings, files, dirs, types, index, values):
-    if index:
-        indices = [int(s) for s in values]
-        values = _load_last_matches(indices)
-    entry_type = _select_entry_type(strings, files, dirs, types, index)
+def unignore(strings, files, dirs, types, values):
+    entry_type = _select_entry_type(strings, files, dirs, types)
     _edit_ignore_entries(entry_type, mode=MODE.SUBTRACT, values=list(values))
+
+
+@cli.command("list", help="Print the current ignore configuration")
+def _list():
+    config = _load_ignore_config()
+    config.print()
 
 
 if __name__ == "__main__":
