@@ -19,217 +19,24 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import train_test_split
 
+from models.features import get_features
+
 candidate_pattern = r"""(["'`])[a-zA-Z0-9&*!?.\-_#%@^&$"'`{} ()\[\]]{6,30}\1"""
 
-# Define coordinates for QWERTY keyboard keys
-# Approximate positions:
-# Row 1 (y=0): q to p at x=0..9
-# Row 2 (y=1): a to l at x=0.5..8.5
-# Row 3 (y=2): z to m at x=1.25..7.25
 
-key_positions = {}
-# Row 0
-row0 = "1234567890-=_+"
-for i, key in enumerate(row0):
-    key_positions[key] = (i - 0.5, -1)
-
-# Row 1
-row1 = "qwertyuiop[]{}"
-for i, key in enumerate(row1):
-    key_positions[key] = (i, 0)
-
-# Row 2
-row2 = "asdfghjkl;'\\:\"|"
-for i, key in enumerate(row2):
-    key_positions[key] = (i + 0.5, 1)
-
-# Row 3
-row3 = "zxcvbnm,./<>?"
-for i, key in enumerate(row3):
-    key_positions[key] = (i + 1.25, 2)
-
-
-def average_key_distance(input_string: str) -> float:
-    coords = []
-    for char in input_string.lower():
-        if char in key_positions:
-            coords.append(key_positions[char])
-
-    if len(coords) < 2:
-        return 0.0
-
-    y = "sk_live_[0-9a-zA-Z]{24}"
-
-    distances = []
-    for (x1, y1), (x2, y2) in zip(coords, coords[1:]):
-        dist = math.hypot(x2 - x1, y2 - y1)
-        distances.append(dist)
-
-    return sum(distances) / len(distances)
-
-
-def has_consecutive_sequence(s: str, seq_len: int = 3) -> bool:
-    s_lower = s.lower()
-    n = len(s_lower)
-
-    for i in range(n - seq_len + 1):
-        substr = s_lower[i: i + seq_len]
-
-        # all letters?
-        if all(ch in string.ascii_lowercase for ch in substr):
-            if all(
-                    ord(substr[j + 1]) - ord(substr[j]) in (1, -1) for j in range(seq_len - 1)
-            ):
-                return True
-
-        # all digits?
-        if all(ch.isdigit() for ch in substr):
-            if all(
-                    int(substr[j + 1]) - int(substr[j]) in (1, -1) for j in range(seq_len - 1)
-            ):
-                return True
-
-    return False
-
-
-sonority = {
-    "a": 10,
-    "b": 4,
-    "c": 3,
-    "d": 4,
-    "e": 10,
-    "f": 5,
-    "g": 4,
-    "h": 9,
-    "i": 10,
-    "j": 4,
-    "k": 3,
-    "l": 8,
-    "m": 7,
-    "n": 7,
-    "o": 10,
-    "p": 3,
-    "q": 3,
-    "r": 8,
-    "s": 5,
-    "t": 3,
-    "u": 10,
-    "v": 6,
-    "w": 9,
-    "x": 3,
-    "y": 10,
-    "z": 6,
-}
-
-alphabet = list("abcdefghijklmnopqrstuvwxyz")
-short_words = alphabet + ["".join(x) for x in combinations_with_replacement(alphabet, 2)]
-
-snippet_words_df = list(pd.read_csv("data/context_words.csv"))
-
-english_words = set()
-with open("data/words.txt", "r") as f:
-    for line in f.readlines():
-        english_words.add(line.strip().casefold())
-temp = "|".join(map(re.escape, english_words))
-english_pattern = re.compile(rf"\b({temp})\b")
-
-keywords = set()
-with open("data/keywords.txt", "r") as f:  # taken from https://github.com/e3b0c442/keywords?tab=readme-ov-file
-    for line in f.readlines():  # and from https://www.ibm.com/docs/en/i/7.6.0?topic=extensions-standard-c-library-functions-table-by-name
-        keywords.add(line.strip().casefold())
-temp = "|".join(map(re.escape, keywords))
-keyword_pattern = re.compile(rf"\b({temp})\b")
-
-extensions = set()  # taken from https://gist.github.com/securifera/e7eed730cbe1ce43d0c29d7cd2d582f4
-with open("data/extensions.txt", "r") as f:
-    for line in f.readlines():
-        extensions.add(line.strip().casefold())
-temp = "|".join(map(re.escape, extensions))
-file_type_pattern = re.compile(rf"({temp})$")
-
-domains = set()  # taken from https://github.com/datasets/top-level-domain-names/blob/main/data/top-level-domain-names.csv?plain=1
-with open("data/domains.txt", "r") as f:
-    for line in f.readlines():
-        domains.add(line.strip().casefold())
-temp = "|".join(map(re.escape, domains))
-url_pattern = re.compile(rf"({temp})\b")
-
-
-def get_vowel_indices(word: str) -> list[int]:
-    indices = []
-    for i, c in enumerate(word.lower()):
-        if c in "aeiou":
-            indices.append(i)
-    return indices
-
-
-def check_vowel_context(word: str, index) -> int:
-    # Left context: max 2 chars, but not before start
-    left_context = word[max(0, index - 2): index]
-    # Right context: up to 2 chars, slicing handles end-of-word
-    right_context = word[index + 1: index + 3]
-
-    violations = 0
-
-    if len(left_context) > 1:
-        if left_context[0] in "aeiouy" or left_context[1] in "aeiouy":
-            ...
-        elif (
-                index == 2 and left_context[0] == "s"
-        ):  # s is allways allowed to start an onset in english
-            ...
-        elif (
-                sonority[left_context[1]] < sonority[left_context[0]]
-        ):  # "rka" is bad "kra" is good
-            violations += 1
-
-    if len(right_context) > 1:
-        if right_context[0] in "aeiouy" or right_context[1] in "aeiouy":
-            ...
-        elif right_context in ("ch", "ph", "gh", "th"):  # digraphs are allowed too
-            ...
-        elif sonority[right_context[1]] > sonority[right_context[0]]:
-            violations += 1
-    return violations
-
-
-def check_ssg(word: str) -> int:
-    vowel_indices = get_vowel_indices(word)
-    violations = 0
-    for index in vowel_indices:
-        violations += check_vowel_context(word, index)
-    return violations
-
-
-def follows_ssg(s: str) -> int:
-    s = s.lower()
-    words = re.findall(r"[a-z]+", s)
-    violations = 0
-    for word in words:
-        word = re.sub(r"[aeiou]+", "a", word)
-        violations += check_ssg(word)
-    return violations
-
-
-def extract_candidates_from_file(path):
+def extract_candidates_from_file(path) -> pd.DataFrame:
     with open(path, "r") as f:
         candidates = []
         for line in f.readlines():
             if match := re.search(candidate_pattern, line):
                 candidates.append(match.group()[1:-1])
-    return candidates
+    return pd.DataFrame(candidates, columns=["text"])
 
 
-def get_char_types_mask(s: str) -> list[int]:
-    l = []
-    for c in s:
-        if c.lower() in "abcdefjhijklmnopqrstuvwxyz":
-            l.append(0)
-        elif c.isdigit():
-            l.append(1)
-        else:
-            l.append(2)
-    return l
+alphabet = list("abcdefghijklmnopqrstuvwxyz")
+short_words = alphabet + ["".join(x) for x in combinations_with_replacement(alphabet, 2)]
+
+snippet_words_df = list(pd.read_csv("data/context_words.csv"))
 
 
 @dataclasses.dataclass
@@ -260,238 +67,6 @@ class Score:
         return f"{self.eta},{self.n_estimators},{self.max_depth},{self.samples},{self.accuracy},{self.precision},{self.recall},{self.f1}"
 
 
-def get_features(s: str) -> tuple[float | bool, ...]:
-    features = []
-
-    # contains special character
-    for c in "!@#$^&*()_+[]'\";/,><\\|{}":
-        if c in s:
-            features.append(True)
-            break
-    else:
-        features.append(False)
-
-    features.append(len(s))
-
-    # starts with capital letter
-    if s[0] in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
-        features.append(True)
-    else:
-        features.append(False)
-
-    # is all capslock
-    # if re.match("[^A-Z]", s):
-    #     features.append(False)
-    # else:
-    #     features.append(True)
-
-    # longest capital sequence
-    caps = re.findall(r"[A-Z]+", s) or [""]
-    longest = max([len(x) for x in caps])
-    features.append(longest)
-
-    # longest vowel sequence
-    caps = re.findall(r"[aeiou]+", s.lower()) or [""]
-    longest = max([len(x) for x in caps])
-    features.append(longest / len(s))
-
-    # longest consonant sequence
-    caps = re.findall(r"[bcdfghjklmnpqrstvxz]+", s.lower()) or [""]
-    longest = max([len(x) for x in caps])
-    features.append(longest / len(s))
-
-    # ends with special character
-    if s[-1].lower() not in "abcdefghijklmnopqrstuvwxyz0123456789":
-        features.append(True)
-    else:
-        features.append(False)
-
-    # contains a space
-    # if " " in s:
-    #     features.append(True)
-    # else:
-    #     features.append(False)
-
-    # fraction of the string that's digits
-    digits = len(re.findall(r"\d", s))
-    features.append(digits / len(s))
-
-    # fraction of the string that's vowels
-    vowels = len(re.findall(r"[aeiou]", s.lower()))
-    features.append(vowels / len(s))
-
-    # is entirely hexadecimal
-    if re.match(r"^[0-9a-fA-F]+$", s):
-        features.append(True)
-    else:
-        features.append(False)
-
-    # longest hexadecimal sequence
-    hexas = re.findall(r"[0-9a-fA-F]+", s) or [""]
-    longest = max([len(x) for x in hexas])
-    features.append(longest)
-
-    # number of alphanumeric sequences of length divisible by 4
-    segments = re.findall(r"[0-9a-zA-Z]+", s) or [""]
-    number_of_fours = len([1 for x in segments if len(x) % 4 == 0])
-    features.append(number_of_fours)
-
-    # fraction of the string that's symbols
-    symbols = len(re.findall(r"\W", s))
-    features.append(symbols / len(s))
-    # see if there's any symbols at all
-    # features.append(symbols > 0)
-
-    # is in special format:
-    # snake_case
-    if re.match(r"^[a-zA-Z]+(_[a-zA-Z_]+)+$", s):
-        features.append(1)
-    # UpperCamel
-    elif re.match(r"^([A-Z][a-z]+)+$", s):
-        features.append(2)
-    # lowerCamel
-    elif re.match(r"^([A-Z]?[a-z]+)+$", s):
-        features.append(3)
-    # kebab-case
-    elif re.match(r"^[a-zA-Z]+(-[a-zA-Z\-]+)+$", s):
-        features.append(4)
-    # ALLCAPS
-    elif re.match(r"^[A-Z]+$", s):
-        features.append(5)
-    else:
-        features.append(0)
-
-    # has escaped characters
-    if re.match(r"\\{1,2}\w{3,4}(?!\w)", s):
-        features.append(True)
-    else:
-        features.append(False)
-
-    # has \n
-    if re.search(r"\\n", s):
-        features.append(True)
-    else:
-        features.append(False)
-
-    # is a relative path
-    if re.match(r"(^/\./)|(^\./)", s):
-        features.append(True)
-    else:
-        features.append(False)
-
-    # is a relative path from parent
-    if re.match(r"(^/\.\./)|(^\.\./)", s):
-        features.append(True)
-    else:
-        features.append(False)
-
-    # is of format [letters][numbers][symbol] or [letters][symbol][numbers]
-    if re.match(r"^[A-Za-z]+[0-9]+\W?$", s):
-        features.append(True)
-    else:
-        features.append(False)
-
-    if re.match(r"^[A-Za-z]+\W?[0-9]+$", s):
-        features.append(True)
-    else:
-        features.append(False)
-
-    # contains a birth year
-    for group in re.findall(r"(?<!\d)\d{4}(?!\d)", s):
-        if 1900 < int(group) < 2100:
-            features.append(True)
-            break
-    else:
-        features.append(False)
-
-    if re.match(r"\d{4}-\d{2}-\d{2}", s):
-        features.append(True)
-    else:
-        features.append(False)
-
-    # contains html/xml tag
-    if re.search(r"<.{1,3}>", s):
-        features.append(True)
-    else:
-        features.append(False)
-
-    # contains a real word
-    words_contained = re.findall(english_pattern, s.casefold())
-    features.append(len(words_contained))
-
-    # is a real word
-    if re.fullmatch(english_pattern, s.casefold()):
-        features.append(True)
-    else:
-        features.append(False)
-
-    # contains a programming keyword
-    keywords_contained = re.findall(keyword_pattern, s.casefold())
-    features.append(len(keywords_contained))
-
-    # # is a keyword
-    if re.fullmatch(keyword_pattern, s):
-        features.append(True)
-    else:
-        features.append(False)
-
-    # has specific programming syntax symbols
-    for symbol in [".", "::", "?", "%", "->", "__", "==", "===", "//", "\\", "\\\\", "\n"]:
-        if symbol in s:
-            features.append(True)
-        else:
-            features.append(False)
-
-    # ends with file extension
-    if re.search(file_type_pattern, s):
-        features.append(True)
-    else:
-        features.append(False)
-
-    # is likely a url
-    if re.search(url_pattern, s):
-        features.append(True)
-    else:
-        features.append(False)
-
-    # has balanced parentheses
-    if (s.count("(") > 0) and (s.count("(") == s.count(")")):
-        features.append(True)
-    else:
-        features.append(False)
-
-    if (s.count("[") > 0) and (s.count("[") == s.count("]")):
-        features.append(True)
-    else:
-        features.append(False)
-
-    if (s.count("{") > 0) and (s.count("{") == s.count("}")):
-        features.append(True)
-    else:
-        features.append(False)
-
-    # check SSG
-    # features.append(follows_ssg(s))
-
-    # key distance
-    features.append(average_key_distance(s))
-
-    # consecutive letters
-    features.append(has_consecutive_sequence(s))
-
-    types_mask = get_char_types_mask(s)
-
-    # number of switches between character types
-    n = 0
-    for i in range(len(s) - 1):
-        if types_mask[i] != types_mask[i + 1]:
-            n += 1
-    features.append(n)
-
-    # return tuple(features)
-    return np.array(features)
-
-
 def make_tree(samples: int, eta: float, max_depth: int, n_estimators: int, save: bool = True):
     df = pd.read_csv(
         "/Users/danylewin/thingies/university/CS Workshop/Finney/data/PassFInder_Password_Dataset/password_test.csv",
@@ -502,10 +77,11 @@ def make_tree(samples: int, eta: float, max_depth: int, n_estimators: int, save:
     labels = df["label"].astype(int).tolist() + [0 for _ in short_words] + [0 for _ in snippet_words_df]
     labels = [y > 0 for y in labels]
 
-    features = [get_features(text) for text in texts]
+    texts = pd.DataFrame(texts, columns=["text"])
+    word_features = get_features(texts)
 
     texts_train, texts_test, X_train, X_test, y_train, y_test = train_test_split(
-        texts, features, labels, test_size=0.2
+        texts, word_features, labels, test_size=0.2
     )
 
     train_start = datetime.now()
@@ -554,8 +130,9 @@ def make_tree(samples: int, eta: float, max_depth: int, n_estimators: int, save:
 def predict(words):
     with open("src/models/tree.pkl", "rb") as f:
         tree = pickle.load(f)
-    features = [get_features(word) for word in words]
-    res = tree.predict_proba(np.array(features))
+    words = pd.DataFrame(words)
+    word_features = get_features(words)
+    res = tree.predict_proba(word_features)
     return res
 
 
@@ -568,16 +145,16 @@ def clean_results(pred_weights, threshold):
 
 
 def scan(path, threshold=0.2):
-    try:
-        candidates = extract_candidates_from_file(path)
-    except:
-        return []
-    if not candidates:
+    # try:
+    candidates = extract_candidates_from_file(path)
+    # except:
+    # return []
+    if not len(candidates.index):
         return []
     pred_weights = predict(candidates)
     results = clean_results(pred_weights, threshold)
 
-    return [candidates[i] for i, guess in enumerate(results) if guess]
+    return [candidates.loc[i].text for i, guess in enumerate(results) if guess]
 
 
 if __name__ == "__main__":
@@ -587,7 +164,7 @@ if __name__ == "__main__":
         for max_depth in [15]:
             for n_estimators in [1000]:
                 scores = []
-                samples = 10_000_000
+                samples = 1_000_000
                 print(f"Running for {n_estimators=} {max_depth=} {eta=} {samples=}", end=" ")
                 start = datetime.now()
                 for i in range(3):

@@ -1,0 +1,20 @@
+ignore:
+    dirs:
+    - .git
+    - .idea
+    - .venv
+    files:
+    - .DS_Store
+    - noise.txt
+    - noise_generator.py
+    - words.txt
+    types:
+    - .pyc
+    - .pack
+    - .pkl
+    - .cat
+    - .png
+    - .icns
+    strings:
+    - qwertyuiop[]{}
+    - sk_live_[0-9a-z]{32}
