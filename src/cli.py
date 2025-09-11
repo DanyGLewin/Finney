@@ -183,7 +183,7 @@ If they aren't, you can mark them as safe in the following ways:
     finney ignore -f [FILE_NAME...]""")
 
 
-@cli.command()
+@cli.command(help="Run finney on pathed files")
 @click.argument("paths", nargs=-1)
 @click.option("-r", "recursive", is_flag=True, default=False)
 def run(paths, recursive):
@@ -199,9 +199,9 @@ def run(paths, recursive):
     print("Finney didn't find any suspected secrets :D")
 
 
-@cli.command("ignore")
+@cli.command("ignore", help="Add values to ignore list")
 @click.option("-s", "strings", is_flag=True, help="Add specific strings to ignore list (default)")
-@click.option("-f", "files", is_flag=True, help="Add files to ignore list (default)")
+@click.option("-f", "files", is_flag=True, help="Add files to ignore list")
 @click.option("-d", "dirs", is_flag=True, help="Add directories to ignore list")
 @click.option("-t", "types", is_flag=True, help="Add file types to ignore list")
 @click.option("-i", "index", is_flag=True, help="Add word by index in previous run")
@@ -214,7 +214,7 @@ def ignore(strings, files, dirs, types, index, values):
     _edit_ignore_entries(entry_type, mode=MODE.ADD, values=list(values))
 
 
-@cli.command("unignore")
+@cli.command("unignore", help="Remove values from ignore list")
 @click.option("-s", "strings", is_flag=True, help="Remove specific strings from ignore list (default)")
 @click.option("-f", "files", is_flag=True, help="Remove files from list")
 @click.option("-d", "dirs", is_flag=True, help="Remove directories from ignore list")
