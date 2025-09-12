@@ -1,6 +1,5 @@
-import math
 import re
-import string
+from collections import defaultdict
 
 import numpy as np
 import pandas as pd
@@ -33,12 +32,61 @@ with open("data/domains.txt", "r") as f:
 temp = "|".join(map(re.escape, domains))
 url_pattern = re.compile(rf"(?:{temp})\b")
 
+key_distances = pd.read_csv("data/bigrams.csv", index_col=0).to_numpy()
+key_index = {ch: i for i, ch in enumerate("!@#$%^&*()_+1234567890-=qwertyuiop[]{}asdfghjkl;'\\:\"|~zxcvbnm,./<>?)}")}
+
+character_type_map = defaultdict(int)
+for c in "abcdefghijklmnopqrstuvwxyz":
+    character_type_map[c] = 1
+for c in "0123456789":
+    character_type_map[c] = 2
+
+
+def extract_bigrams(word: str) -> list[tuple[str, str]]:
+    if len(word) < 2:
+        return []
+    word = word.lower().strip()
+    return list(zip(word, word[1:]))
+
+
+def avg_key_distance(bigrams: list[tuple[str, str]]) -> np.float32:
+    total_distance = np.float32(0)
+    for bigram in bigrams:
+        c1, c2 = bigram
+        if c1 not in key_index or c2 not in key_index:
+            continue
+        total_distance += key_distances[key_index[c1]][key_index[c2]]  # type: ignore
+    return total_distance / len(bigrams)
+
+
+def count_type_switches(bigrams: list[tuple[str, str]]) -> int:
+    switch_count = 0
+    for bigram in bigrams:
+        c1, c2 = bigram
+        switch_count += character_type_map[c1] != character_type_map[c2]
+    return switch_count
+
+
+def extract_trigrams(word: str) -> list[tuple[str, str, str]]:
+    if len(word) < 3:
+        return []
+    word = word.lower().strip()
+    return list(zip(word, word[1:], word[2:]))
+
+
+def has_consecutive_sequence(trigrams: list[tuple[str, str, str]]) -> bool:
+    for trigram in trigrams:
+        c1, c2, c3 = trigram
+        if abs(ord(c1) - ord(c2)) == 1 and ord(c1) - ord(c2) == ord(c2) - ord(c3):
+            return True
+    return False
+
 
 def get_features(df: pd.DataFrame) -> pd.DataFrame:
     out = pd.DataFrame()
 
     # contains special character
-    out["special"] = df["text"].str.contains("[\!\@\#\$\^\&\*\(\)_\+\[\]'\"\;\/\,\>\<\\\|\{\}\?\.]", regex=True)
+    out["special"] = df["text"].str.contains("[!@#\$\^\&\*\(\)_\+\[\]'\"\;\/\,\>\<\\\|\{\}\?\.]", regex=True)
 
     # ends with special character
     out["special_end"] = df["text"].str.contains("[^a-zA-Z0-9]$", regex=True)
@@ -161,21 +209,14 @@ def get_features(df: pd.DataFrame) -> pd.DataFrame:
     # string length
     out["string_length"] = df["text"].astype(str).str.len()
 
-    # TODO: translate these to numpy
-    # key distance
-    # features.append(average_key_distance(s))
+    # split the word into bigrams (e.g. "bigram" -> [bi, ig, gr, ra, am])
+    bigrams = df.text.map(lambda word: extract_bigrams(word))
+    out["key_distances"] = list(map(avg_key_distance, bigrams))
+    out["type_switches"] = list(map(count_type_switches, bigrams))
 
-    # consecutive letters
-    # features.append(has_consecutive_sequence(s))
-
-    # types_mask = get_char_types_mask(s)
-
-    # number of switches between character types
-    # n = 0
-    # for i in range(len(s) - 1):
-    #     if types_mask[i] != types_mask[i + 1]:
-    #         n += 1
-    # features.append(n)
+    # split the word into trigrams (e.g. "trigram" -> [tri, rig, igr, gra, ram])
+    trigrams = df.text.map(lambda word: extract_trigrams(word))
+    out["consecutive_sequence"] = list(map(has_consecutive_sequence, trigrams))
 
     # return tuple(features)
     return out

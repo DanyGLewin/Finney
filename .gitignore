@@ -520,3 +520,4 @@ pyrightconfig.json
 tests/dump/*
 .secrets/log
 *.pkl
+.finney/*

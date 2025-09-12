@@ -1,8 +1,6 @@
 import dataclasses
-import math
 import pickle
 import re
-import string
 import time
 from datetime import datetime
 from itertools import combinations_with_replacement
@@ -84,9 +82,6 @@ def make_tree(samples: int, eta: float, max_depth: int, n_estimators: int, save:
         texts, word_features, labels, test_size=0.2
     )
 
-    train_start = datetime.now()
-    # clf = tree.DecisionTreeClassifier()
-    # clf = ensemble.RandomForestClassifier(n_estimators=500)
     clf = xgb.XGBClassifier(max_depth=max_depth, n_estimators=n_estimators, eta=eta)
 
     clf = clf.fit(np.array(X_train), np.array(y_train))  # train the model
@@ -167,7 +162,7 @@ if __name__ == "__main__":
                 samples = 1_000_000
                 print(f"Running for {n_estimators=} {max_depth=} {eta=} {samples=}", end=" ")
                 start = datetime.now()
-                for i in range(3):
+                for i in range(1):
                     print(i + 1, end=" ")
                     scores.append(make_tree(
                         eta=eta,
