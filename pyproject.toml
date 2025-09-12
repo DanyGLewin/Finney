@@ -1,26 +1,47 @@
 [project]
-name = "Finney"
+name = "finney"
 version = "0.0.1"
 description = "Pre-commit hook to make sure you don't accidentally push secrets"
 readme = "README.md"
 requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Dany Lewin", email = "danyglewin@gmail.com" },
+    { name = "Ravid Prozan", email = "ravidprozan@gmail.com" }
+]
 dependencies = [
     "click",
     "PyYAML",
     "pandas",
-    "tensorflow",
-    "scikit-learn",
-    "xgboost",
-    "rich"
+    "rich",
+    "pre-commit"
 ]
 
 [project.optional-dependencies]
 dev = [
     "pre-commit",
+    "tensorflow",
+    "scikit-learn",
+    "xgboost",
 ]
 
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Quality Assurance",
+  "Topic :: Software Development :: Version Control :: Git",
+  "Typing :: Typed"
+]
+
+[project.urls]
+Homepage = "https://github.com/DanyGLewin/Finney/"
+Issues = "https://github.com/DanyGLewin/Finney/issues"
+
 [project.scripts]
-# Installs a `mycli` console command that invokes the top-level module `cli:main`
 finney = "cli:cli"
 
 [build-system]
@@ -28,6 +49,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-# Use src/ layout with a single module cli.py
 package-dir = { "" = "src" }
 py-modules = ["cli"]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"

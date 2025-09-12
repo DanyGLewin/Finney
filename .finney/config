@@ -8,6 +8,7 @@ ignore:
     - noise.txt
     - noise_generator.py
     - words.txt
+    - pyproject.toml
     types:
     - .pyc
     - .pack

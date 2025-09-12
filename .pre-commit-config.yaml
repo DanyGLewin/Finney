@@ -7,4 +7,4 @@ repos:
         language: python
         always_run: true
         pass_filenames: true
-        additional_dependencies: [ click, PyYAML, pandas, tensorflow, scikit-learn ]
+        additional_dependencies: [ click, PyYAML, pandas, scikit-learn, rich, xgboost==3.0.4 ]
