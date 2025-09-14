@@ -9,7 +9,7 @@ from typing import Self
 import numpy as np
 import pandas as pd
 
-from models.features import get_features
+from finney.models.features import get_features
 
 candidate_pattern = r"""(["'`])[a-zA-Z0-9&*!?.\-_#%@^&$"'`{} ()\[\]]{6,30}\1"""
 
@@ -26,7 +26,7 @@ def extract_candidates_from_file(path) -> pd.DataFrame:
 alphabet = list("abcdefghijklmnopqrstuvwxyz")
 short_words = alphabet + ["".join(x) for x in combinations_with_replacement(alphabet, 2)]
 
-snippet_words_df = list(pd.read_csv("data/context_words.csv"))
+snippet_words_df = list(pd.read_csv("src/finney/data/context_words.csv"))
 
 
 @dataclasses.dataclass
@@ -127,7 +127,7 @@ def make_tree(word_features: pd.DataFrame, samples: int, eta: float, max_depth: 
     # print(f"  {f1}")
 
     if save:
-        with open("src/models/tree.pkl", "wb") as f:
+        with open("src/finney/models/tree.pkl", "wb") as f:
             pickle.dump(clf, f)
             time.sleep(0.5)
 
@@ -140,7 +140,7 @@ def make_tree(word_features: pd.DataFrame, samples: int, eta: float, max_depth: 
 
 
 def predict(words):
-    with open("src/models/tree.pkl", "rb") as f:
+    with open("src/finney/models/tree.pkl", "rb") as f:
         tree = pickle.load(f)
     words = pd.DataFrame(words)
     word_features = get_features(words)
@@ -182,7 +182,7 @@ if __name__ == "__main__":
     # ).sample(int(samples*1.01)).dropna().sample(samples)
 
     df = pd.read_csv(
-        "/Users/danylewin/thingies/university/CS Workshop/Finney/data/PassFInder_Password_Dataset/password_test.csv",
+        "/finney/data/PassFInder_Password_Dataset/password_test.csv",
         header=None,
         names=["text", "label"],
     ).dropna()
@@ -194,7 +194,7 @@ if __name__ == "__main__":
     texts = pd.DataFrame(texts, columns=["text"])
     word_features = get_features(texts)
 
-    with open("src/models/features.pkl", "wb") as f:
+    with open("src/finney/models/features.pkl", "wb") as f:
         pickle.dump(word_features, f)
         time.sleep(0.5)
 

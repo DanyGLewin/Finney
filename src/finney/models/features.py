@@ -5,34 +5,34 @@ import numpy as np
 import pandas as pd
 
 english_words = set()
-with open("data/words.txt", "r") as f:
+with open("src/finney/data/words.txt", "r") as f:
     for line in f.readlines():
         english_words.add(line.strip().casefold())
 temp = "|".join(map(re.escape, english_words))
 english_pattern = re.compile(rf"\b(?:{temp})\b")
 
 keywords = set()
-with open("data/keywords.txt", "r") as f:  # taken from https://github.com/e3b0c442/keywords?tab=readme-ov-file
+with open("src/finney/data/keywords.txt", "r") as f:  # taken from https://github.com/e3b0c442/keywords?tab=readme-ov-file
     for line in f.readlines():  # and from https://www.ibm.com/docs/en/i/7.6.0?topic=extensions-standard-c-library-functions-table-by-name
         keywords.add(line.strip().casefold())
 temp = "|".join(map(re.escape, keywords))
 keyword_pattern = re.compile(rf"\b(?:{temp})\b")
 
 extensions = set()  # taken from https://gist.github.com/securifera/e7eed730cbe1ce43d0c29d7cd2d582f4
-with open("data/extensions.txt", "r") as f:
+with open("src/finney/data/extensions.txt", "r") as f:
     for line in f.readlines():
         extensions.add(line.strip().casefold())
 temp = "|".join(map(re.escape, extensions))
 file_type_pattern = re.compile(rf"(?:{temp})$")
 
 domains = set()  # taken from https://github.com/datasets/top-level-domain-names/blob/main/data/top-level-domain-names.csv?plain=1
-with open("data/domains.txt", "r") as f:
+with open("src/finney/data/domains.txt", "r") as f:
     for line in f.readlines():
         domains.add(line.strip().casefold())
 temp = "|".join(map(re.escape, domains))
 url_pattern = re.compile(rf"(?:{temp})\b")
 
-key_distances = pd.read_csv("data/bigrams.csv", index_col=0).to_numpy()
+key_distances = pd.read_csv("src/finney/data/bigrams.csv", index_col=0).to_numpy()
 key_index = {ch: i for i, ch in enumerate("!@#$%^&*()_+1234567890-=qwertyuiop[]{}asdfghjkl;'\\:\"|~zxcvbnm,./<>?)}")}
 
 character_type_map = defaultdict(int)

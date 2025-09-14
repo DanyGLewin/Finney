@@ -3,16 +3,15 @@ import time
 from itertools import combinations_with_replacement
 
 import pandas as pd
-from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import GridSearchCV, train_test_split
 import xgboost as xgb
 
-from models.features import get_features
+from finney.models.features import get_features
 
 alphabet = list("abcdefghijklmnopqrstuvwxyz")
 short_words = alphabet + ["".join(x) for x in combinations_with_replacement(alphabet, 2)]
 
-snippet_words_df = list(pd.read_csv("data/context_words.csv"))
+snippet_words_df = list(pd.read_csv("src/finney/data/context_words.csv"))
 
 
 def run_grid_search():
@@ -24,7 +23,7 @@ def run_grid_search():
     }
 
     df = pd.read_csv(
-        "/Users/danylewin/thingies/university/CS Workshop/Finney/data/PassFInder_Password_Dataset/password_test.csv",
+        "/finney/data/PassFInder_Password_Dataset/password_test.csv",
         header=None,
         names=["text", "label"],
     ).sample(samples)
@@ -52,7 +51,7 @@ def run_grid_search():
     # grid_search_recall = GridSearchCV(estimator=clf, param_grid=param_grid, cv=3, n_jobs=-1, verbose=2,
     #                                   scoring=confusion_matrix_scorer, return_train_score=True).fit(X_train, y_train)
 
-    with open("src/models/grid_search.pkl", "wb") as f:
+    with open("src/finney/models/grid_search.pkl", "wb") as f:
         pickle.dump(grid_search, f)
     time.sleep(0.5)
 

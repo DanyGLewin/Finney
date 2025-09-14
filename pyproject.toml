@@ -42,11 +42,10 @@ Homepage = "https://github.com/DanyGLewin/Finney/"
 Issues = "https://github.com/DanyGLewin/Finney/issues"
 
 [project.scripts]
-finney = "cli:cli"
+finney = "finney.cli:cli"
 
 [tool.setuptools]
-package-dir = { "" = "src" }
-py-modules = ["cli", "search", "domain_objects"]
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]

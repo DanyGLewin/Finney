@@ -3,8 +3,8 @@ from typing import Sequence
 
 import click
 
-from domain_objects import Match, IgnoreConfig
-from models import intrinsic, decision_tree
+from finney.domain_objects import Match, IgnoreConfig
+from finney.models import intrinsic, decision_tree
 
 
 def should_scan(file: Path, ignored: IgnoreConfig) -> bool:
@@ -33,7 +33,7 @@ def find_lines(matches: list[Match]) -> list[Match]:
 
 
 keywords = set()
-with open("data/keywords.txt", "r") as f:  # taken from https://github.com/e3b0c442/keywords?tab=readme-ov-file
+with open("src/finney/data/keywords.txt", "r") as f:  # taken from https://github.com/e3b0c442/keywords?tab=readme-ov-file
     for line in f.readlines():
         keywords.add(line.strip().casefold())
 
@@ -42,6 +42,15 @@ def clean_matches(matches: list[Match]) -> list[Match]:
     matches = [m for m in matches if m.match.casefold() not in keywords]
     return list(set(matches))
 
+
+def make_paths_relative(paths: list[Path]) -> list[Path]:
+    out = []
+    for p in paths:
+        p = p.expanduser()
+        if not p.is_absolute():
+            p = Path.cwd() / p
+        out.append(p.resolve(strict=False))
+    return out
 
 def scan_files(paths: Sequence[str], ignored: IgnoreConfig) -> list[Match]:
     files = [Path(f) for f in paths]

@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-from domain_objects import IgnoreConfig
+from ..domain_objects import IgnoreConfig
 
 regexes = [
     r"[1-9][0-9]+-[0-9a-zA-Z]{40}",

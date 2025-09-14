@@ -2,7 +2,6 @@ import os
 import pickle
 from collections import defaultdict
 from enum import Enum
-from hashlib import sha256
 from pathlib import Path
 from typing import Sequence
 
@@ -12,8 +11,8 @@ from rich.table import Table
 from rich import box
 import yaml
 
-import search
-from domain_objects import Match, IgnoreConfig
+from finney import search
+from finney.domain_objects import Match, IgnoreConfig
 
 root = ".finney"
 config_path = f"{root}/config"
