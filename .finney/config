@@ -16,6 +16,8 @@ ignore:
     - .cat
     - .png
     - .icns
+    - .ico
     strings:
     - qwertyuiop[]{}
     - sk_live_[0-9a-z]{32}
+    - abcde

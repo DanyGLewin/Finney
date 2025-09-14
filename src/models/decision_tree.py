@@ -8,14 +8,7 @@ from typing import Self
 
 import numpy as np
 import pandas as pd
-import xgboost as xgb
-from sklearn.metrics import (
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-)
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
 
 from models.features import get_features
 
@@ -43,10 +36,14 @@ class Score:
     n_estimators: int
     max_depth: int
     samples: int
-    accuracy: float
-    precision: float
-    recall: float
-    f1: float
+    train_accuracy: float
+    train_precision: float
+    train_recall: float
+    train_f1: float
+    test_accuracy: float
+    test_precision: float
+    test_recall: float
+    test_f1: float
 
     @staticmethod
     def avg(scores: list['Self']):
@@ -55,53 +52,73 @@ class Score:
             n_estimators=scores[0].n_estimators,
             max_depth=scores[0].max_depth,
             samples=scores[0].samples,
-            accuracy=sum([sc.accuracy for sc in scores]) / len(scores),
-            precision=sum([sc.precision for sc in scores]) / len(scores),
-            recall=sum([sc.recall for sc in scores]) / len(scores),
-            f1=sum([sc.f1 for sc in scores]) / len(scores),
+            train_accuracy=sum([sc.train_accuracy for sc in scores]) / len(scores),
+            train_precision=sum([sc.train_precision for sc in scores]) / len(scores),
+            train_recall=sum([sc.train_recall for sc in scores]) / len(scores),
+            train_f1=sum([sc.train_f1 for sc in scores]) / len(scores),
+            test_accuracy=sum([sc.test_accuracy for sc in scores]) / len(scores),
+            test_precision=sum([sc.test_precision for sc in scores]) / len(scores),
+            test_recall=sum([sc.test_recall for sc in scores]) / len(scores),
+            test_f1=sum([sc.test_f1 for sc in scores]) / len(scores),
         )
 
     def __str__(self):
-        return f"{self.eta},{self.n_estimators},{self.max_depth},{self.samples},{self.accuracy},{self.precision},{self.recall},{self.f1}"
+        return f"{self.eta},{self.n_estimators},{self.max_depth},{self.samples},{self.train_accuracy},{self.test_accuracy},{self.train_precision},{self.test_precision},{self.train_recall},{self.test_recall},{self.train_f1},{self.test_f1}"
 
 
-def make_tree(samples: int, eta: float, max_depth: int, n_estimators: int, save: bool = True):
-    df = pd.read_csv(
-        "/Users/danylewin/thingies/university/CS Workshop/Finney/data/PassFInder_Password_Dataset/password_test.csv",
-        header=None,
-        names=["text", "label"],
-    ).sample(samples)
-    texts = df["text"].astype(str).tolist() + short_words + snippet_words_df
-    labels = df["label"].astype(int).tolist() + [0 for _ in short_words] + [0 for _ in snippet_words_df]
-    labels = [y > 0 for y in labels]
-
-    texts = pd.DataFrame(texts, columns=["text"])
-    word_features = get_features(texts)
+def make_tree(word_features: pd.DataFrame, samples: int, eta: float, max_depth: int, n_estimators: int,
+              save: bool = True):
+    import xgboost as xgb
+    from sklearn.metrics import (
+        accuracy_score,
+        precision_score,
+        recall_score,
+        f1_score,
+    )
+    from sklearn.model_selection import train_test_split
 
     texts_train, texts_test, X_train, X_test, y_train, y_test = train_test_split(
-        texts, word_features, labels, test_size=0.2
+        texts, word_features, labels, test_size=0.2, random_state=42
     )
 
     clf = xgb.XGBClassifier(max_depth=max_depth, n_estimators=n_estimators, eta=eta)
 
     clf = clf.fit(np.array(X_train), np.array(y_train))  # train the model
 
+    y_train = np.array(y_train)
+    train_preds = clf.predict(X_train)
+    train_accuracy = accuracy_score(y_train > 0, train_preds > 0)
+    train_precision = precision_score(y_train > 0, train_preds > 0, average="macro")
+    train_recall = recall_score(y_train > 0, train_preds > 0, average="macro")
+    train_f1 = f1_score(y_train > 0, train_preds > 0, average="macro")
+
+    confusion = confusion_matrix(y_train, train_preds)
+    print(confusion)
+
+
     y_test = np.array(y_test)
-    preds = clf.predict(X_test)
-    accuracy = accuracy_score(y_test > 0, preds > 0)
-    precision = precision_score(y_test > 0, preds > 0, average="macro")
-    recall = recall_score(y_test > 0, preds > 0, average="macro")
-    f1 = f1_score(y_test > 0, preds > 0, average="macro")
+    test_preds = clf.predict(X_test)
+    test_accuracy = accuracy_score(y_test > 0, test_preds > 0)
+    test_precision = precision_score(y_test > 0, test_preds > 0, average="macro")
+    test_recall = recall_score(y_test > 0, test_preds > 0, average="macro")
+    test_f1 = f1_score(y_test > 0, test_preds > 0, average="macro")
+
+    confusion = confusion_matrix(y_test, test_preds)
+    print(confusion)
 
     score = Score(
         eta=eta,
         max_depth=max_depth,
         n_estimators=n_estimators,
         samples=samples,
-        accuracy=accuracy,
-        precision=precision,
-        recall=recall,
-        f1=f1,
+        train_accuracy=train_accuracy,
+        train_precision=train_precision,
+        train_recall=train_recall,
+        train_f1=train_f1,
+        test_accuracy=test_accuracy,
+        test_precision=test_precision,
+        test_recall=test_recall,
+        test_f1=test_f1,
     )
     # print("Performance metrics:")
     # print(f"  {accuracy}")
@@ -114,10 +131,10 @@ def make_tree(samples: int, eta: float, max_depth: int, n_estimators: int, save:
             pickle.dump(clf, f)
             time.sleep(0.5)
 
-    df = pd.DataFrame(texts_test)
-    df["y_true"] = y_test
-    df["y_pred"] = preds.astype(bool)
-    errors = df[df["y_true"] != df["y_pred"]]
+    # df = pd.DataFrame(texts_test)
+    # df["y_true"] = y_test
+    # df["y_pred"] = preds.astype(bool)
+    # errors = df[df["y_true"] != df["y_pred"]]
 
     return score
 
@@ -153,22 +170,51 @@ def scan(path, threshold=0.2):
 
 
 if __name__ == "__main__":
+    samples = 5_000_000
+
+    now = datetime.now()
+    print(f"[{now.hour:0>2}:{now.minute:0>2}:{now.second:0>2}] Starting to compute features")
+
+    # df = pd.read_csv(
+    #     "/Users/danylewin/thingies/university/CS Workshop/Finney/data/PassFInder_Password_Dataset/password_test.csv",
+    #     header=None,
+    #     names=["text", "label"],
+    # ).sample(int(samples*1.01)).dropna().sample(samples)
+
+    df = pd.read_csv(
+        "/Users/danylewin/thingies/university/CS Workshop/Finney/data/PassFInder_Password_Dataset/password_test.csv",
+        header=None,
+        names=["text", "label"],
+    ).dropna()
+
+    texts = df["text"].astype(str).tolist() + short_words + snippet_words_df
+    labels = df["label"].astype(int).tolist() + [0 for _ in short_words] + [0 for _ in snippet_words_df]
+    labels = [y > 0 for y in labels]
+
+    texts = pd.DataFrame(texts, columns=["text"])
+    word_features = get_features(texts)
+    now = datetime.now()
+    print(f"[{now.hour}:{now.minute}:{now.second}] Finished computing features, starting run")
+
     with open("scores.csv", "a") as f:
-        f.write("eta,n_estimators,max_depth,samples,accuracy,precision,recall,f1\n")
-    for eta in [0.02]:
+        f.write(
+            "eta,n_estimators,max_depth,samples,train_accuracy,train_precision,train_recall,train_f1,test_accuracy,test_precision,test_recall,test_f1\n")
+
+    for eta in [0.05]:
         for max_depth in [15]:
             for n_estimators in [1000]:
                 scores = []
-                samples = 1_000_000
                 print(f"Running for {n_estimators=} {max_depth=} {eta=} {samples=}", end=" ")
                 start = datetime.now()
                 for i in range(1):
                     print(i + 1, end=" ")
                     scores.append(make_tree(
+                        word_features=word_features,
                         eta=eta,
                         max_depth=max_depth,
                         n_estimators=n_estimators,
                         samples=samples,
+                        save=False,
                     ))
                     avg = Score.avg(scores)
                     with open("scores.csv", "a") as f:

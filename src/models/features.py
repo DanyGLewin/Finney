@@ -51,6 +51,8 @@ def extract_bigrams(word: str) -> list[tuple[str, str]]:
 
 def avg_key_distance(bigrams: list[tuple[str, str]]) -> np.float32:
     total_distance = np.float32(0)
+    if not bigrams:
+        return total_distance
     for bigram in bigrams:
         c1, c2 = bigram
         if c1 not in key_index or c2 not in key_index:
@@ -119,7 +121,7 @@ def get_features(df: pd.DataFrame) -> pd.DataFrame:
     out["xml"] = df["text"].str.contains(r"<.{1,3}>", regex=True)
 
     # contains specific special characters that are kinda common in code
-    out["period"] = df["text"].str.contains(".")
+    out["period"] = df["text"].str.contains("\.")
     out["double_colon"] = df["text"].str.contains("::")
     out["question"] = df["text"].str.contains("\?")
     out["percent"] = df["text"].str.contains("%")
