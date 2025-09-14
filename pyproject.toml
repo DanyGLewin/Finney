@@ -1,6 +1,6 @@
 [project]
 name = "finney"
-version = "0.0.7"
+version = "0.0.8"
 description = "Pre-commit hook to make sure you don't accidentally push secrets"
 readme = "README.md"
 requires-python = ">=3.9"
