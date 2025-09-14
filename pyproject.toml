@@ -46,6 +46,7 @@ finney = "cli:cli"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
+py-modules = ["cli", "search", "domain_objects"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
