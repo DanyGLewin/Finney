@@ -51,6 +51,9 @@ py-modules = ["cli", "search", "domain_objects"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+finney = ["data/*.txt"]
+
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
