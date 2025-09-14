@@ -1,6 +1,6 @@
 [project]
 name = "finney"
-version = "0.0.9"
+version = "0.1.1"
 description = "Pre-commit hook to make sure you don't accidentally push secrets"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -50,6 +50,9 @@ py-modules = ["cli", "search", "domain_objects"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+finney = ["data/*.txt"]
 
 [build-system]
 requires = ["setuptools", "wheel"]
