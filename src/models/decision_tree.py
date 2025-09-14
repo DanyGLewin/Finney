@@ -8,7 +8,6 @@ from typing import Self
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import confusion_matrix
 
 from models.features import get_features
 
@@ -74,6 +73,7 @@ def make_tree(word_features: pd.DataFrame, samples: int, eta: float, max_depth: 
         precision_score,
         recall_score,
         f1_score,
+        confusion_matrix
     )
     from sklearn.model_selection import train_test_split
 
@@ -189,10 +189,15 @@ if __name__ == "__main__":
 
     texts = df["text"].astype(str).tolist() + short_words + snippet_words_df
     labels = df["label"].astype(int).tolist() + [0 for _ in short_words] + [0 for _ in snippet_words_df]
-    labels = [y > 0 for y in labels]
+    # labels = [y > 0 for y in labels]
 
     texts = pd.DataFrame(texts, columns=["text"])
     word_features = get_features(texts)
+
+    with open("src/models/features.pkl", "wb") as f:
+        pickle.dump(word_features, f)
+        time.sleep(0.5)
+
     now = datetime.now()
     print(f"[{now.hour}:{now.minute}:{now.second}] Finished computing features, starting run")
 
@@ -214,7 +219,7 @@ if __name__ == "__main__":
                         max_depth=max_depth,
                         n_estimators=n_estimators,
                         samples=samples,
-                        save=False,
+                        save=True,
                     ))
                     avg = Score.avg(scores)
                     with open("scores.csv", "a") as f:
