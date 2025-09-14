@@ -66,11 +66,10 @@ def _edit_ignore_entries(
     prev_config = _load_ignore_config()
 
     if mode == MODE.ADD and entry_type == ENTRY_TYPE.STRINGS:
-        last_run_hashes = _load_last_matches()
+        last_run_matches = _load_last_matches()
         temp = set(values)
         for value in values:
-            hashed_value = sha256(value.encode("utf-8")).hexdigest()
-            if hashed_value not in last_run_hashes:
+            if value not in last_run_matches:
                 if not click.confirm(f"String {value} was not found in the last run. Are you sure you want to ignore it?", default=True, prompt_suffix="\n>>> "):
                     temp.remove(value)
         values = list(temp)
@@ -163,10 +162,10 @@ def _print_match_group(matches: list[Match]) -> None:
 
 def _pretty_print(matches: Sequence[Match]) -> None:
     match_groups = _matches_by_file(matches)
-    matches_str = f"{len(matches)} {'secrets' if len(matches) > 1 else 'secret'}"
-    files_str = f"{len(match_groups)} {'files' if len(match_groups) > 1 else 'group'}"
+    matches_str = f"{len(matches)} suspected {'secrets' if len(matches) > 1 else 'secret'}"
+    files_str = f"{len(match_groups)} {'files' if len(match_groups) > 1 else 'file'}"
     click.secho(
-        f"Found suspected {matches_str} in {files_str}:\n"
+        f"Found {matches_str} in {files_str}:\n"
     )
     for path, group in sorted(match_groups.items(), key=lambda item: item[1][0].path):
         _print_match_group(group)
@@ -176,11 +175,11 @@ If they aren't, you can mark them as safe in the following ways:
 - Ignore specific strings explicity:
     finney ignore [STRINGS...]
     
-- Ignore specific strings by ID:
-    finney ignore -i [ID...]
-    
 - Ignore entire files:
-    finney ignore -f [FILE_NAME...]""")
+    finney ignore -f [FILE_NAME...]
+    
+- Ignore specific lines by appending to them
+    # finney: ignore""")
 
 
 @cli.command(help="Run Finney on the given files")
